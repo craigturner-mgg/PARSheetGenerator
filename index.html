@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PAR Sheet Evaluator</title>
+    <title>PAR Sheet Generator</title>
     <style>
         * {
             margin: 0;
@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #1a1a2e;
+            background: #000000;
             color: #e0e0e0;
             min-height: 100vh;
             padding: 20px;
@@ -21,7 +21,7 @@
 
         h1 {
             text-align: center;
-            color: #00d4ff;
+            color: #ff8c00;
             margin-bottom: 10px;
             font-size: 2em;
         }
@@ -38,18 +38,17 @@
         }
 
         .upload-section {
-            background: #16213e;
-            border: 2px dashed #00d4ff;
+            background: #000000;
+            border: 2px dashed #ff8c00;
             border-radius: 12px;
-            padding: 40px;
+            padding: 10px;
             text-align: center;
-            margin-bottom: 30px;
             cursor: pointer;
             transition: background 0.3s;
         }
 
         .upload-section:hover {
-            background: #1a2a4e;
+            background: #111111;
         }
 
         .upload-section input {
@@ -58,18 +57,18 @@
 
         .upload-section p {
             font-size: 1.2em;
-            color: #00d4ff;
+            color: #ff8c00;
         }
 
         .config-section {
-            background: #16213e;
+            background: #000000;
             border-radius: 12px;
             padding: 20px;
             margin-bottom: 30px;
         }
 
         .config-section h2 {
-            color: #00d4ff;
+            color: #ff8c00;
             margin-bottom: 15px;
         }
 
@@ -86,8 +85,8 @@
         }
 
         .config-grid input, .config-grid select {
-            background: #0f3460;
-            border: 1px solid #00d4ff;
+            background: #000000;
+            border: 1px solid #ff8c00;
             color: #e0e0e0;
             padding: 8px 12px;
             border-radius: 6px;
@@ -102,14 +101,14 @@
         }
 
         .result-card {
-            background: #16213e;
+            background: #000000;
             border-radius: 12px;
             padding: 20px;
-            border-left: 4px solid #00d4ff;
+            border-left: 4px solid #ff8c00;
         }
 
         .result-card h3 {
-            color: #00d4ff;
+            color: #ff8c00;
             margin-bottom: 10px;
         }
 
@@ -124,14 +123,14 @@
         .result-card .value.bad { color: #ff4444; }
 
         .detail-section {
-            background: #16213e;
+            background: #000000;
             border-radius: 12px;
             padding: 20px;
             margin-bottom: 30px;
         }
 
         .detail-section h2 {
-            color: #00d4ff;
+            color: #ff8c00;
             margin-bottom: 15px;
         }
 
@@ -144,18 +143,18 @@
         th, td {
             padding: 10px 12px;
             text-align: left;
-            border-bottom: 1px solid #0f3460;
+            border-bottom: 1px solid #222222;
         }
 
         th {
-            background: #0f3460;
-            color: #00d4ff;
+            background: #000000;
+            color: #ff8c00;
             position: sticky;
             top: 0;
         }
 
         tr:hover {
-            background: #1a2a4e;
+            background: #111111;
         }
 
         .symbol-count-table {
@@ -163,8 +162,8 @@
         }
 
         button {
-            background: #00d4ff;
-            color: #1a1a2e;
+            background: #ff8c00;
+            color: #000000;
             border: none;
             padding: 12px 24px;
             border-radius: 8px;
@@ -175,7 +174,7 @@
         }
 
         button:hover {
-            background: #00a8cc;
+            background: #cc7000;
         }
 
         .tab-container {
@@ -192,13 +191,13 @@
         .tab-buttons button {
             padding: 8px 16px;
             font-size: 0.85em;
-            background: #0f3460;
+            background: #000000;
             color: #e0e0e0;
         }
 
         .tab-buttons button.active {
-            background: #00d4ff;
-            color: #1a1a2e;
+            background: #ff8c00;
+            color: #000000;
         }
 
         .tab-content {
@@ -238,7 +237,7 @@
 
         .reel-selector-btn {
             padding: 12px 16px;
-            background: #0f3460;
+            background: #000000;
             color: #e0e0e0;
             border: 2px solid transparent;
             border-radius: 8px;
@@ -249,14 +248,14 @@
         }
 
         .reel-selector-btn:hover {
-            background: #1a2a4e;
-            border-color: #00d4ff;
+            background: #111111;
+            border-color: #ff8c00;
         }
 
         .reel-selector-btn.active {
-            background: #00d4ff;
-            color: #1a1a2e;
-            border-color: #00d4ff;
+            background: #ff8c00;
+            color: #000000;
+            border-color: #ff8c00;
             font-weight: bold;
         }
 
@@ -271,7 +270,7 @@
         }
 
         .reel-strip-editor {
-            background: #0f3460;
+            background: #000000;
             border-radius: 8px;
             padding: 15px;
             overflow-y: auto;
@@ -287,16 +286,16 @@
             align-items: center;
             position: sticky;
             top: 0;
-            background: #0f3460;
+            background: #000000;
             z-index: 10;
             padding: 10px 0;
-            border-bottom: 1px solid #16213e;
+            border-bottom: 1px solid #222222;
         }
 
         .reel-strip-editor .editor-toolbar select,
         .reel-strip-editor .editor-toolbar input {
-            background: #16213e;
-            border: 1px solid #00d4ff;
+            background: #000000;
+            border: 1px solid #ff8c00;
             color: #e0e0e0;
             padding: 6px 10px;
             border-radius: 6px;
@@ -315,9 +314,9 @@
         }
 
         .reel-strip-editor .editor-toolbar button.secondary {
-            background: #0f3460;
-            color: #00d4ff;
-            border: 1px solid #00d4ff;
+            background: #000000;
+            color: #ff8c00;
+            border: 1px solid #ff8c00;
         }
 
         .reel-strip-list {
@@ -331,8 +330,8 @@
             align-items: center;
             gap: 10px;
             padding: 8px 12px;
-            background: #16213e;
-            border: 1px solid #1a2a4e;
+            background: #000000;
+            border: 1px solid #222222;
             border-radius: 6px;
             margin-bottom: 4px;
             cursor: grab;
@@ -341,18 +340,18 @@
         }
 
         .reel-strip-list li:hover {
-            border-color: #00d4ff;
-            background: #1a2a4e;
+            border-color: #ff8c00;
+            background: #111111;
         }
 
         .reel-strip-list li.dragging {
             opacity: 0.5;
-            border-color: #00d4ff;
-            background: #0a1628;
+            border-color: #ff8c00;
+            background: #000000;
         }
 
         .reel-strip-list li.drag-over {
-            border-top: 3px solid #00d4ff;
+            border-top: 3px solid #ff8c00;
             margin-top: -3px;
         }
 
@@ -396,7 +395,7 @@
         }
 
         .reel-stats-panel {
-            background: #0f3460;
+            background: #000000;
             border-radius: 8px;
             padding: 15px;
             overflow-y: auto;
@@ -407,7 +406,7 @@
         }
 
         .reel-stats-panel h4 {
-            color: #00d4ff;
+            color: #ff8c00;
             margin-bottom: 10px;
             font-size: 0.95em;
         }
@@ -419,18 +418,18 @@
 
         .stats-table th, .stats-table td {
             padding: 6px 8px;
-            border-bottom: 1px solid #16213e;
+            border-bottom: 1px solid #222222;
         }
 
         .stats-table th {
-            background: #16213e;
+            background: #000000;
             font-size: 0.85em;
         }
 
         .freq-bar {
             display: inline-block;
             height: 8px;
-            background: #00d4ff;
+            background: #ff8c00;
             border-radius: 4px;
             margin-left: 6px;
             vertical-align: middle;
@@ -439,12 +438,12 @@
         .duplicate-section {
             margin-top: 15px;
             padding-top: 15px;
-            border-top: 1px solid #16213e;
+            border-top: 1px solid #222222;
         }
 
         .duplicate-section select {
-            background: #16213e;
-            border: 1px solid #00d4ff;
+            background: #000000;
+            border: 1px solid #ff8c00;
             color: #e0e0e0;
             padding: 6px 10px;
             border-radius: 6px;
@@ -462,14 +461,14 @@
         .symbol-color-H3 { background: #6e3a5e; color: #fff; }
         .symbol-color-H2 { background: #8a3a3a; color: #fff; }
         .symbol-color-H1 { background: #8a6a2d; color: #fff; }
-        .symbol-color-W { background: #d4a800; color: #1a1a2e; }
-        .symbol-color-S { background: #00d4ff; color: #1a1a2e; }
+        .symbol-color-W { background: #d4a800; color: #000000; }
+        .symbol-color-S { background: #ff8c00; color: #000000; }
         .symbol-color-default { background: #444; color: #fff; }
 
         .win-dist-bar {
             display: inline-block;
             height: 20px;
-            background: linear-gradient(90deg, #00d4ff, #00aa55);
+            background: linear-gradient(90deg, #ff8c00, #00aa55);
             border-radius: 4px;
             vertical-align: middle;
             min-width: 2px;
@@ -487,8 +486,8 @@
 
         /* Paytable Editor */
         .paytable-edit-table input {
-            background: #0f3460;
-            border: 1px solid #1a2a4e;
+            background: #000000;
+            border: 1px solid #222222;
             color: #e0e0e0;
             padding: 6px 10px;
             border-radius: 4px;
@@ -498,75 +497,155 @@
         }
 
         .paytable-edit-table input:focus {
-            border-color: #00d4ff;
+            border-color: #ff8c00;
             outline: none;
         }
 
         .paytable-edit-table tr.selected-row {
-            background: #1a3a5e;
-            border-left: 3px solid #00d4ff;
+            background: #111111;
+            border-left: 3px solid #ff8c00;
         }
 
         .paytable-edit-table .symbol-cell {
             font-weight: bold;
             font-size: 1em;
         }
+
+        /* Hide native number input spinners */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎰 PAR Sheet Evaluator</h1>
-        <p class="subtitle">Probability & Return Analysis for Reel-based Slot Games</p>
-
-        <div class="upload-section" id="uploadSection">
-            <p>📂 Click or drag an Excel (.xlsx) PAR sheet here</p>
-            <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <!-- SPLASH SCREEN -->
+    <div id="splashScreen" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; position: relative; z-index: 100;">
+        <img src="logo.jpg" alt="Mad Goose Games" style="width: 400px; margin-bottom: 40px;">
+        <div style="display: flex; gap: 20px;">
+            <button id="splashNewBtn" onclick="document.getElementById('splashScreen').style.display='none'; document.getElementById('wizardScreen').style.display='block';" style="background: #ff8c00; color: #ffffff; padding: 14px 30px; font-size: 1.1em;">NEW</button>
+            <label style="background: #ff8c00; color: #ffffff; padding: 14px 30px; font-size: 1.1em; border-radius: 8px; font-weight: bold; cursor: pointer; display: inline-block;">
+                UPLOAD
+                <input type="file" id="splashFileInput" accept=".xlsx,.xls" style="display: none;" onchange="if(this.files[0]){document.getElementById('splashScreen').style.display='none';document.getElementById('mainApp').style.display='block';processFile(this.files[0]);}">
+            </label>
         </div>
+    </div>
 
-        <div style="text-align: center; margin-bottom: 30px;">
-            <span style="color: #666; margin: 0 15px;">— or —</span>
-        </div>
-
-        <div style="text-align: center; margin-bottom: 30px;">
-            <button id="startFromScratchBtn" style="background: #00ff88; color: #1a1a2e; padding: 14px 30px; font-size: 1.1em;">🆕 Start from Scratch</button>
-        </div>
-
-        <div class="config-section">
-            <h2>⚙️ Game Configuration</h2>
-            <div class="config-grid">
-                <label>
-                    Number of Reels
-                    <input type="number" id="numReels" value="5" min="3" max="7">
-                </label>
-                <label>
-                    Rows Visible
-                    <input type="number" id="numRows" value="4" min="1" max="6">
-                </label>
-                <label>
-                    Win Lines
-                    <input type="number" id="numLines" value="19" min="1" max="100">
-                </label>
-                <label>
-                    Wild Symbol ID
-                    <input type="text" id="wildSymbol" value="W">
-                </label>
-                <label>
-                    Scatter Symbol ID
-                    <input type="text" id="scatterSymbol" value="S">
-                </label>
-            </div>
-        </div>
-
-        <div id="resultsArea" style="display:none;">
-            <div class="config-section" style="border-left: 4px solid #ffaa00;">
-                <h2>🎲 Reel Sets & Weighting</h2>
-                <p style="color: #aaa; margin-bottom: 12px; font-size: 0.85em;">Define multiple reel sets with weights. The total RTP is calculated as a weighted average across all sets.</p>
-                <div id="reelSetsPanel"></div>
+    <!-- WIZARD SCREEN -->
+    <div id="wizardScreen" style="display: none; min-height: 100vh; padding: 40px 20px;">
+        <div style="max-width: 900px; margin: 0 auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                <div></div>
+                <h1 style="color: #ff8c00; margin: 0;">New PAR Sheet</h1>
+                <button id="wizCancelBtn" style="padding: 10px 20px; font-size: 0.9em; background: #333; color: #e0e0e0;">&#10005; Cancel</button>
             </div>
 
-            <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                <button id="exportExcelBtn" style="background: #00aa55; font-size: 0.9em; padding: 10px 20px;">📥 Export to Excel</button>
+            <!-- Step 1: Reels & Height -->
+            <div id="wizardStep1" class="config-section" style="border: 1px solid #333;">
+                <h2 style="color: #ff8c00; margin-bottom: 20px;">Step 1: Reel Layout</h2>
+                <div style="display: flex; gap: 40px; align-items: center; justify-content: center; margin-bottom: 20px;">
+                    <label style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <span style="font-size: 1em; color: #aaa;">Number of Reels</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button onclick="stepInput('wizReels', -1)" style="padding: 8px 14px; font-size: 1.2em; background: #ff8c00; color: #fff; border-radius: 6px;">−</button>
+                            <input type="number" id="wizReels" value="5" min="3" max="7" style="background: #000; border: 1px solid #ff8c00; color: #ffffff; padding: 12px 16px; border-radius: 8px; font-size: 1.5em; width: 80px; text-align: center; -moz-appearance: textfield; -webkit-appearance: none; appearance: textfield;">
+                            <button onclick="stepInput('wizReels', 1)" style="padding: 8px 14px; font-size: 1.2em; background: #ff8c00; color: #fff; border-radius: 6px;">+</button>
+                        </div>
+                    </label>
+                    <label style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <span style="font-size: 1em; color: #aaa;">Rows (Height)</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button onclick="stepInput('wizRows', -1)" style="padding: 8px 14px; font-size: 1.2em; background: #ff8c00; color: #fff; border-radius: 6px;">−</button>
+                            <input type="number" id="wizRows" value="3" min="1" max="6" style="background: #000; border: 1px solid #ff8c00; color: #ffffff; padding: 12px 16px; border-radius: 8px; font-size: 1.5em; width: 80px; text-align: center; -moz-appearance: textfield; -webkit-appearance: none; appearance: textfield;">
+                            <button onclick="stepInput('wizRows', 1)" style="padding: 8px 14px; font-size: 1.2em; background: #ff8c00; color: #fff; border-radius: 6px;">+</button>
+                        </div>
+                    </label>
+                </div>
+                <div style="text-align: center; margin-top: 10px;">
+                    <div id="wizPreview" style="display: inline-grid; gap: 3px; padding: 15px; border: 1px solid #333; border-radius: 8px;"></div>
+                </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button id="wizStep1Next" style="background: #ff8c00; color: #fff; padding: 12px 30px; font-size: 1em;">Next: Win Lines →</button>
+                </div>
             </div>
+
+            <!-- Step 2: Win Lines -->
+            <div id="wizardStep2" class="config-section" style="border: 1px solid #333; display: none; max-height: 80vh; overflow-y: auto;">
+                <h2 style="color: #ff8c00; margin-bottom: 10px;">Step 2: Win Lines</h2>
+                <p style="color: #aaa; margin-bottom: 15px; font-size: 0.9em;">Click cells on each reel to define a line path. Each line must have one cell selected per reel.</p>
+
+                <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
+                    <span style="color: #e0e0e0;">Line <strong id="wizCurrentLineNum">1</strong> of <span id="wizTotalLines">1</span></span>
+                    <button id="wizAddLine" style="padding: 8px 16px; font-size: 0.85em; background: #ff8c00; color: #fff;">+ Add Line</button>
+                    <button id="wizRemoveLine" style="padding: 8px 16px; font-size: 0.85em; background: #ff4444; color: #fff;">− Remove Line</button>
+                    <button id="wizPrevLine" style="padding: 8px 16px; font-size: 0.85em; background: #333; color: #e0e0e0;">← Prev</button>
+                    <button id="wizNextLine" style="padding: 8px 16px; font-size: 0.85em; background: #333; color: #e0e0e0;">Next →</button>
+                </div>
+
+                <div id="wizLineGrid" style="display: inline-grid; gap: 3px; padding: 15px; border: 1px solid #333; border-radius: 8px; margin-bottom: 20px;"></div>
+
+                <div id="wizLinesList" style="height: 180px; overflow-y: scroll; border: 1px solid #333; border-radius: 8px; padding: 10px; margin-bottom: 20px;" tabindex="0">
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <button id="wizBack" style="padding: 12px 30px; font-size: 1em; background: #333; color: #e0e0e0; margin-right: 10px;">← Back</button>
+                    <button id="wizStep2Next" style="background: #ff8c00; color: #fff; padding: 12px 30px; font-size: 1em;">Next: Paytable →</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Paytable -->
+            <div id="wizardStep3" class="config-section" style="border: 1px solid #333; display: none;">
+                <h2 style="color: #ff8c00; margin-bottom: 10px;">Step 3: Paytable</h2>
+                <p style="color: #aaa; margin-bottom: 15px; font-size: 0.9em;">Define your symbols, their pays for each reel match length, and special roles (Wild / Feature trigger).</p>
+
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
+                    <input type="text" id="wizNewSymbolId" placeholder="Symbol ID (e.g. H1)" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 8px 12px; border-radius: 6px; width: 140px; font-size: 0.95em;">
+                    <button id="wizAddSymbol" style="padding: 8px 16px; font-size: 0.85em; background: #ff8c00; color: #fff;">+ Add Symbol</button>
+                    <button id="wizRemoveSymbol" style="padding: 8px 16px; font-size: 0.85em; background: #ff4444; color: #fff;">− Remove Selected</button>
+                </div>
+
+                <div style="overflow-x: auto; border: 1px solid #333; border-radius: 8px;">
+                    <table id="wizPaytable" style="width: 100%; font-size: 0.9em;">
+                        <thead id="wizPaytableHead"></thead>
+                        <tbody id="wizPaytableBody"></tbody>
+                    </table>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <button id="wizBack2" style="padding: 12px 30px; font-size: 1em; background: #333; color: #e0e0e0; margin-right: 10px;">← Back</button>
+                    <button id="wizFinish" style="background: #ff8c00; color: #fff; padding: 12px 30px; font-size: 1em;">Finish & Generate PAR →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP (hidden on load) -->
+    <div class="container" id="mainApp" style="display: none;">
+        <h1>PAR Sheet Generator</h1>
+        <p class="subtitle">Generate PAR Sheets for AI Simulations</p>
+
+        <!-- Hidden elements for JS compatibility -->
+        <div id="uploadSection" style="display: none;">
+            <p></p>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+        </div>
+        <button id="startFromScratchBtn" style="display: none;"></button>
+        <input type="number" id="numReels" value="5" min="3" max="7" style="display: none;">
+        <input type="number" id="numRows" value="4" min="1" max="6" style="display: none;">
+        <input type="number" id="numLines" value="19" min="1" max="100" style="display: none;">
+        <input type="text" id="wildSymbol" value="W" style="display: none;">
+        <input type="text" id="scatterSymbol" value="S" style="display: none;">
+
+        <!-- MAIN VIEW: Reel Sets Overview -->
+        <div id="mainReelSetsView">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: #ff8c00;">🎲 Reel Sets</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button id="exportExcelBtn" style="background: #00aa55; font-size: 0.9em; padding: 10px 20px; color: #fff;">📥 Export to Excel</button>
+                </div>
+            </div>
+
             <div class="results-section">
                 <div class="result-card">
                     <h3>📊 Total RTP (Base Game)</h3>
@@ -585,13 +664,28 @@
                     <div class="value" id="totalPayout">--</div>
                 </div>
             </div>
+            <div class="results-section" style="grid-template-columns: 1fr;">
+                <div class="result-card">
+                    <h3>🎰 Feature Hit Rate</h3>
+                    <div class="value" id="featureHitRate">--</div>
+                </div>
+            </div>
+
+            <div id="reelSetsPanel"></div>
+        </div>
+
+        <!-- EDIT VIEW: Reel Strips + Editor for a single reel set -->
+        <div id="editReelSetView" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                <button id="editBackBtn" style="padding: 10px 20px; font-size: 0.9em; background: #333; color: #e0e0e0;">← Back to Reel Sets</button>
+                <h2 style="color: #ff8c00; margin: 0;" id="editReelSetTitle">Editing Reel Set 1</h2>
+            </div>
 
             <div class="tab-container">
                 <div class="tab-buttons">
                     <button class="active" data-tab="reelConfig">🎰 Reel Strips</button>
                     <button data-tab="reelEditor">🛠️ Reel Editor</button>
                     <button data-tab="paytableEditor">💰 Paytable Editor</button>
-                    <button data-tab="dataTab">� Data</button>
                 </div>
 
                 <div class="tab-content active" id="reelConfig">
@@ -617,7 +711,7 @@
                                     <button id="deleteSelectedBtn" class="danger">🗑️ Delete Selected</button>
                                     <span style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
                                         <label style="font-size: 0.8em; color: #aaa;">Filter:</label>
-                                        <select id="filterSymbolSelect" style="background: #16213e; border: 1px solid #00d4ff; color: #e0e0e0; padding: 6px 10px; border-radius: 6px; font-size: 0.85em;">
+                                        <select id="filterSymbolSelect" style="background: #000000; border: 1px solid #ff8c00; color: #e0e0e0; padding: 6px 10px; border-radius: 6px; font-size: 0.85em;">
                                             <option value="">All Symbols</option>
                                         </select>
                                     </span>
@@ -634,47 +728,1589 @@
                         <h2>💰 Paytable Editor</h2>
                         <p style="color: #aaa; margin-bottom: 15px;">Adjust symbol pays. Changes recalculate RTP instantly.</p>
                         <div class="paytable-editor-toolbar" style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
-                            <input type="text" id="newSymbolId" placeholder="Symbol ID" style="background: #0f3460; border: 1px solid #00d4ff; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; width: 100px;">
+                            <input type="text" id="newSymbolId" placeholder="Symbol ID" style="background: #000000; border: 1px solid #ff8c00; color: #e0e0e0; padding: 8px 12px; border-radius: 6px; width: 100px;">
                             <button id="addPaytableRowBtn">+ Add Symbol</button>
                             <button id="removePaytableRowBtn" class="danger" style="background: #ff4444; color: #fff;">🗑️ Remove Selected</button>
                         </div>
                         <div class="scrollable-table" id="paytableEditorTable"></div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="tab-content" id="dataTab">
-                    <div class="detail-section">
-                        <h2>� Analysis Data</h2>
-                        <div class="tab-buttons" style="margin-bottom: 15px;">
-                            <button class="active data-sub-tab" data-subtab="subSymbolBreakdown">Symbol Breakdown</button>
-                            <button class="data-sub-tab" data-subtab="subLineDetail">Line-by-Line</button>
-                            <button class="data-sub-tab" data-subtab="subReelComp">Reel Composition</button>
-                            <button class="data-sub-tab" data-subtab="subScatterInfo">Scatter / Free Games</button>
-                            <button class="data-sub-tab" data-subtab="subWinDist">Win Distribution</button>
-                        </div>
-                        <div class="data-sub-content" id="subSymbolBreakdown">
-                            <div class="scrollable-table" id="symbolTable"></div>
-                        </div>
-                        <div class="data-sub-content" id="subLineDetail" style="display:none;">
-                            <div class="scrollable-table" id="lineTable"></div>
-                        </div>
-                        <div class="data-sub-content" id="subReelComp" style="display:none;">
-                            <div class="scrollable-table" id="reelTable"></div>
-                        </div>
-                        <div class="data-sub-content" id="subScatterInfo" style="display:none;">
-                            <div id="scatterTable"></div>
-                        </div>
-                        <div class="data-sub-content" id="subWinDist" style="display:none;">
-                            <div id="winDistTable"></div>
-                        </div>
-                    </div>
+        <!-- DATA VIEW: Analysis data for a single reel set -->
+        <div id="dataReelSetView" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                <button id="dataBackBtn" style="padding: 10px 20px; font-size: 0.9em; background: #333; color: #e0e0e0;">← Back to Reel Sets</button>
+                <h2 style="color: #ff8c00; margin: 0;" id="dataReelSetTitle">Data: Reel Set 1</h2>
+            </div>
+
+            <div class="results-section">
+                <div class="result-card">
+                    <h3>📊 RTP (This Set)</h3>
+                    <div class="value" id="dataSetRtp">--</div>
+                </div>
+                <div class="result-card">
+                    <h3>🎯 Hit Frequency</h3>
+                    <div class="value" id="dataSetHitFreq">--</div>
+                </div>
+                <div class="result-card">
+                    <h3>🔢 Total Combinations</h3>
+                    <div class="value" id="dataSetCombos">--</div>
+                </div>
+                <div class="result-card">
+                    <h3>💰 Total Payout (per unit)</h3>
+                    <div class="value" id="dataSetPayout">--</div>
+                </div>
+            </div>
+            <div class="results-section" style="grid-template-columns: 1fr;">
+                <div class="result-card">
+                    <h3>🎰 Feature Hit Rate</h3>
+                    <div class="value" id="dataSetFeatureRate">--</div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="tab-buttons" style="margin-bottom: 15px;">
+                    <button class="active data-sub-tab" data-subtab="subSymbolBreakdown">Symbol Breakdown</button>
+                    <button class="data-sub-tab" data-subtab="subLineDetail">Line-by-Line</button>
+                    <button class="data-sub-tab" data-subtab="subReelComp">Reel Composition</button>
+                    <button class="data-sub-tab" data-subtab="subScatterInfo">Scatter / Free Games</button>
+                    <button class="data-sub-tab" data-subtab="subWinDist">Win Distribution</button>
+                </div>
+                <div class="data-sub-content" id="subSymbolBreakdown">
+                    <div class="scrollable-table" id="symbolTable"></div>
+                </div>
+                <div class="data-sub-content" id="subLineDetail" style="display:none;">
+                    <div class="scrollable-table" id="lineTable"></div>
+                </div>
+                <div class="data-sub-content" id="subReelComp" style="display:none;">
+                    <div class="scrollable-table" id="reelTable"></div>
+                </div>
+                <div class="data-sub-content" id="subScatterInfo" style="display:none;">
+                    <div id="scatterTable"></div>
+                </div>
+                <div class="data-sub-content" id="subWinDist" style="display:none;">
+                    <div id="winDistTable"></div>
                 </div>
             </div>
         </div>
+
+        <!-- Hidden resultsArea for JS compatibility -->
+        <div id="resultsArea" style="display:none;"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="par-evaluator.js"></script>
     <script src="reel-editor.js"></script>
+    <script>
+        // CRITICAL: Override renderReelSetsPanel immediately to prevent old UI from showing
+        (function() {
+            var _origRenderReelSetsPanel = window.renderReelSetsPanel;
+            window.renderReelSetsPanel = function() {
+                var container = document.getElementById('reelSetsPanel');
+                if (!container) return;
+                if (typeof window._renderCustomReelSetsPanel === 'function') {
+                    try { window._renderCustomReelSetsPanel(); } catch(e) { console.error('Reel panel error:', e); }
+                } else {
+                    // Not ready yet — schedule it for after main script loads
+                    setTimeout(function() {
+                        if (typeof window._renderCustomReelSetsPanel === 'function') {
+                            try { window._renderCustomReelSetsPanel(); } catch(e) { console.error('Reel panel error (deferred):', e); }
+                        }
+                    }, 50);
+                }
+            };
+
+            var _origRunEvaluation = window.runEvaluation;
+            window.runEvaluation = function() {
+                // Auto-detect config from loaded data
+                if (typeof gameData !== 'undefined') {
+                    if (gameData.reelStrips && gameData.reelStrips.length > 0) {
+                        var detectedReels = gameData.reelStrips.length;
+                        if (parseInt(document.getElementById('numReels').value) !== detectedReels) {
+                            document.getElementById('numReels').value = detectedReels;
+                        }
+                    }
+                    if (gameData.winLines && gameData.winLines.length > 0) {
+                        document.getElementById('numLines').value = gameData.winLines.length;
+                        var maxRow = 1;
+                        for (var k = 0; k < gameData.winLines.length; k++) {
+                            for (var j = 0; j < gameData.winLines[k].length; j++) {
+                                if (gameData.winLines[k][j] > maxRow) maxRow = gameData.winLines[k][j];
+                            }
+                        }
+                        document.getElementById('numRows').value = maxRow;
+                    }
+
+                    // Sync custom feature trigger UI data into engine format
+                    if (gameData.reelSets) {
+                        for (var s = 0; s < gameData.reelSets.length; s++) {
+                            var ft = gameData.reelSets[s].featureTrigger;
+                            if (ft && ft.enabled) {
+                                // Set scatter symbol for the engine
+                                if (ft.triggerSymbol) {
+                                    document.getElementById('scatterSymbol').value = ft.triggerSymbol;
+                                }
+                                // Build awards array from our UI data
+                                var targetIdx = 0;
+                                if (ft.reelBands && ft.reelBands.length > 0) {
+                                    targetIdx = ft.reelBands[0].setIndex || 0;
+                                }
+                                ft.awards = [{
+                                    scatterCount: ft.triggerCount || 3,
+                                    spins: ft.numSpins || 10,
+                                    targetSetIndex: targetIdx
+                                }];
+                                ft.triggerCount = ft.triggerCount || 3;
+                                ft.numSpins = ft.numSpins || 10;
+                                ft.targetSetIndex = targetIdx;
+                                ft.globalMultiplier = ft.globalMultiplier || 1;
+                                ft.retrigger = !!ft.retriggerEnabled;
+
+                                // If retrigger is enabled, ensure the target set has a feature trigger
+                                // that awards additional spins (pointing to itself or the retrigger set)
+                                if (ft.retriggerEnabled) {
+                                    var rtTargetIdx = ft.retriggerSetIndex !== undefined ? ft.retriggerSetIndex : targetIdx;
+                                    var targetSet = gameData.reelSets[targetIdx];
+                                    if (targetSet) {
+                                        if (!targetSet.featureTrigger) {
+                                            targetSet.featureTrigger = { enabled: false };
+                                        }
+                                        // Set up retrigger awards on the target set
+                                        targetSet.featureTrigger.enabled = true;
+                                        targetSet.featureTrigger.retrigger = true;
+                                        if (!targetSet.featureTrigger.awards) {
+                                            targetSet.featureTrigger.awards = [];
+                                        }
+                                        // Add retrigger award if not already present
+                                        var rtAward = {
+                                            scatterCount: ft.retriggerScatters || 3,
+                                            spins: ft.retriggerSpins || 5,
+                                            targetSetIndex: rtTargetIdx
+                                        };
+                                        // Replace any existing retrigger award
+                                        targetSet.featureTrigger.awards = [rtAward];
+                                        targetSet.featureTrigger.targetSetIndex = rtTargetIdx;
+                                        targetSet.featureTrigger.globalMultiplier = targetSet.featureTrigger.globalMultiplier || 1;
+                                    }
+                                }
+                                // If collect retrigger is enabled, calculate expected additional spins
+                                // based on probability of collecting X symbols in N spins
+                                if (ft.collectEnabled && ft.collectSymbol && ft.collectCount) {
+                                    ft.collectRetriggerData = {
+                                        symbol: ft.collectSymbol,
+                                        count: ft.collectCount,
+                                        spins: ft.collectSpins || 5,
+                                        setIndex: ft.collectSetIndex !== undefined ? ft.collectSetIndex : 0
+                                    };
+                                }
+                            }
+                            // Sync expanding wilds flag from modifiers
+                            var mods = gameData.reelSets[s].modifiers;
+                            if (mods) {
+                                gameData.reelSets[s].expandingWilds = mods.some(function(m) { return m.type === 'expandingWilds'; });
+                            }
+                        }
+                    }
+                }
+                _origRunEvaluation();
+                document.getElementById('resultsArea').style.display = 'none';
+                if (typeof window._renderCustomReelSetsPanel === 'function') {
+                    try { window._renderCustomReelSetsPanel(); } catch(e) { console.error('Reel panel error (eval):', e); }
+                }
+            };
+        })();
+    </script>
+    <script>
+        // Helper for custom stepper buttons
+        function stepInput(id, delta) {
+            const input = document.getElementById(id);
+            const min = parseInt(input.min);
+            const max = parseInt(input.max);
+            let val = parseInt(input.value) + delta;
+            if (val < min) val = min;
+            if (val > max) val = max;
+            input.value = val;
+            input.dispatchEvent(new Event('input'));
+        }
+
+        // PAR init
+        console.log('PAR init: starting...');
+
+        // ============ SPLASH SCREEN ============
+        const splashScreen = document.getElementById('splashScreen');
+        const wizardScreen = document.getElementById('wizardScreen');
+        const mainApp = document.getElementById('mainApp');
+        const splashNewBtn = document.getElementById('splashNewBtn');
+        const splashFileInput = document.getElementById('splashFileInput');
+
+        splashNewBtn.addEventListener('click', () => {
+            splashScreen.style.display = 'none';
+            wizardScreen.style.display = 'block';
+            wizAddingReelSet = false;
+            renderWizPreview();
+        });
+
+        splashFileInput.addEventListener('change', (e) => {
+            console.log('File selected:', e.target.files[0]);
+            if (e.target.files[0]) {
+                splashScreen.style.display = 'none';
+                mainApp.style.display = 'block';
+                console.log('Calling processFile...');
+                processFile(e.target.files[0]);
+                console.log('processFile called');
+            }
+        });
+
+        // ============ WIZARD CANCEL ============
+        document.getElementById('wizCancelBtn').addEventListener('click', () => {
+            wizardScreen.style.display = 'none';
+            wizAddingReelSet = false;
+            // If a PAR is loaded (reelSets exist), go back to main app
+            if (gameData.reelSets && gameData.reelSets.length > 0 && gameData.reelSets[0].reelStrips && gameData.reelSets[0].reelStrips[0] && gameData.reelSets[0].reelStrips[0].length > 0) {
+                mainApp.style.display = 'block';
+                showMainView();
+            } else {
+                // No PAR loaded, go back to splash
+                splashScreen.style.display = 'flex';
+            }
+            // Reset wizard steps to step 1
+            document.getElementById('wizardStep1').style.display = 'block';
+            document.getElementById('wizardStep2').style.display = 'none';
+            document.getElementById('wizardStep3').style.display = 'none';
+        });
+
+        // ============ VIEW NAVIGATION ============
+        const mainReelSetsView = document.getElementById('mainReelSetsView');
+        const editReelSetView = document.getElementById('editReelSetView');
+        const dataReelSetView = document.getElementById('dataReelSetView');
+
+        function showMainView() {
+            mainReelSetsView.style.display = 'block';
+            editReelSetView.style.display = 'none';
+            dataReelSetView.style.display = 'none';
+            // Re-render the reel sets panel with our custom layout
+            renderCustomReelSetsPanel();
+        }
+
+        function showEditView(setIndex) {
+            if (typeof switchToReelSet === 'function') switchToReelSet(setIndex);
+            gameData.activeReelSet = setIndex;
+            mainReelSetsView.style.display = 'none';
+            editReelSetView.style.display = 'block';
+            dataReelSetView.style.display = 'none';
+            document.getElementById('editReelSetTitle').textContent = `Editing: ${gameData.reelSets[setIndex].name}`;
+            // Trigger re-render of editor panels
+            if (typeof renderReelConfig === 'function') renderReelConfig();
+            if (typeof renderReelEditor === 'function') renderReelEditor();
+            if (typeof renderPaytableEditor === 'function') renderPaytableEditor();
+        }
+
+        function showDataView(setIndex) {
+            if (typeof switchToReelSet === 'function') switchToReelSet(setIndex);
+            gameData.activeReelSet = setIndex;
+            mainReelSetsView.style.display = 'none';
+            editReelSetView.style.display = 'none';
+            dataReelSetView.style.display = 'block';
+            document.getElementById('dataReelSetTitle').textContent = `Data: ${gameData.reelSets[setIndex].name}`;
+
+            // Calculate per-set stats
+            const reelSet = gameData.reelSets[setIndex];
+            const config = getConfig();
+            if (reelSet.reelStrips && reelSet.reelStrips.length > 0 && reelSet.reelStrips[0].length > 0) {
+                const reelLengths = reelSet.reelStrips.map(r => r.length);
+                const totalCombinations = reelLengths.reduce((a, b) => a * b, 1);
+
+                // Swap strips for calculation
+                const savedStrips = gameData.reelStrips;
+                gameData.reelStrips = reelSet.reelStrips;
+                const results = calculateLineWins(config, reelLengths, totalCombinations, reelSet.wildMultipliers || [], reelSet.expandingWilds);
+                gameData.reelStrips = savedStrips;
+
+                const setRtp = (results.totalPayout / totalCombinations) * 100;
+                const hitRatePerLine = results.totalHits / (totalCombinations * config.numLines);
+                const setHitFreq = 1 - Math.pow(1 - hitRatePerLine, config.numLines);
+
+                const rtpEl = document.getElementById('dataSetRtp');
+                rtpEl.textContent = setRtp.toFixed(4) + '%';
+                rtpEl.className = 'value ' + (setRtp >= 94 ? 'good' : setRtp >= 90 ? 'warning' : 'bad');
+
+                document.getElementById('dataSetHitFreq').textContent = setHitFreq > 0 ? '1 in ' + (1 / setHitFreq).toFixed(2) : '∞';
+                document.getElementById('dataSetCombos').textContent = totalCombinations.toLocaleString();
+                document.getElementById('dataSetPayout').textContent = results.totalPayout.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+                // Feature hit rate for this set
+                const setScatter = calculateScatterWins(config, reelLengths, totalCombinations);
+                const setFt = reelSet.featureTrigger;
+                const setTriggerCount = (setFt && setFt.enabled && setFt.triggerCount) ? setFt.triggerCount : 3;
+                const featureRateEl = document.getElementById('dataSetFeatureRate');
+                if (setScatter && setScatter.scatterResults) {
+                    const tr = setScatter.scatterResults.find(sr => sr.count >= setTriggerCount);
+                    if (tr && tr.probability > 0) {
+                        featureRateEl.textContent = '1 in ' + (1 / tr.probability).toFixed(2);
+                    } else {
+                        featureRateEl.textContent = 'N/A';
+                    }
+                } else {
+                    featureRateEl.textContent = 'N/A';
+                }
+            }
+
+            // Re-run evaluation to populate the detail tables for this set
+            if (typeof runEvaluation === 'function') runEvaluation();
+        }
+
+        document.getElementById('editBackBtn').addEventListener('click', () => {
+            if (typeof runEvaluation === 'function') runEvaluation();
+            showMainView();
+        });
+
+        document.getElementById('dataBackBtn').addEventListener('click', () => {
+            showMainView();
+        });
+
+        // Sync modifier UI data to the engine's wildMultipliers format
+        function syncModifiersToEngine(setIdx) {
+            const set = gameData.reelSets[setIdx];
+            if (!set.modifiers) return;
+            const mwMod = set.modifiers.find(m => m.type === 'multiplierWilds');
+            if (mwMod && mwMod.entries && mwMod.entries.length > 0) {
+                set.wildMultipliers = mwMod.entries.map(e => ({ multiplier: e.multiplier, chance: e.chance }));
+            } else {
+                set.wildMultipliers = [];
+            }
+            // Flag expanding wilds
+            set.expandingWilds = set.modifiers.some(m => m.type === 'expandingWilds');
+        }
+
+        // Custom reel sets panel rendering (replaces the default one)
+        function renderCustomReelSetsPanel() {
+            const container = document.getElementById('reelSetsPanel');
+            if (!container || !gameData || !gameData.reelSets) return;
+
+            const totalWeight = gameData.reelSets.reduce((sum, rs) => sum + rs.weight, 0);
+
+            let html = '<table style="width: 100%; border: 1px solid #333; border-radius: 8px;"><tr><th style="padding: 12px;">Name</th><th style="padding: 12px;">Weight</th><th style="padding: 12px;">Weight %</th><th style="padding: 12px;">Feature</th><th style="padding: 12px;">Actions</th></tr>';
+
+            for (let i = 0; i < gameData.reelSets.length; i++) {
+                const set = gameData.reelSets[i];
+                const pct = totalWeight > 0 ? ((set.weight / totalWeight) * 100).toFixed(1) : '0';
+                const hasFeature = set.featureTrigger && set.featureTrigger.enabled;
+
+                html += `<tr style="border-bottom: 1px solid #222;">
+                    <td style="padding: 12px;"><input type="text" value="${set.name}" data-set="${i}" class="rs-name-input" style="background: #111; border: 1px solid #333; color: #fff; padding: 6px 10px; border-radius: 4px; width: 160px; font-size: 0.95em;"></td>
+                    <td style="padding: 12px;"><input type="number" value="${set.weight}" min="0" step="1" data-set="${i}" class="rs-weight-input" style="background: #111; border: 1px solid #333; color: #fff; padding: 6px 10px; border-radius: 4px; width: 70px; font-size: 0.95em; text-align: center;"></td>
+                    <td style="padding: 12px; font-weight: bold; color: #ff8c00;">${pct}%</td>
+                    <td style="padding: 12px;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" class="rs-feature-cb" data-set="${i}" ${hasFeature ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: #ff8c00; cursor: pointer;">
+                            <span style="font-size: 0.85em; color: ${hasFeature ? '#ff8c00' : '#666'};">${hasFeature ? 'Yes' : 'No'}</span>
+                        </label>
+                    </td>
+                    <td style="padding: 12px; display: flex; gap: 8px;">
+                        <button class="rs-edit-btn" data-set="${i}" style="padding: 8px 14px; font-size: 0.85em; background: #ff8c00; color: #fff;">✏️ Edit</button>
+                        <button class="rs-data-btn" data-set="${i}" style="padding: 8px 14px; font-size: 0.85em; background: #333; color: #e0e0e0; border: 1px solid #ff8c00;">📊 Data</button>
+                        ${gameData.reelSets.length > 1 ? `<button class="rs-delete-btn" data-set="${i}" style="padding: 8px 14px; font-size: 0.85em; background: #ff4444; color: #fff;">&#10005;</button>` : ''}
+                    </td>
+                </tr>`;
+
+                // Feature trigger expandable section
+                if (hasFeature) {
+                    const ft = set.featureTrigger;
+                    const symbols = gameData.paytable.map(e => e.symbol);
+                    const triggerSym = ft.triggerSymbol || symbols[symbols.length - 1] || 'S';
+                    const triggerCount = ft.triggerCount || 3;
+                    const numSpins = ft.numSpins || 10;
+                    const isCollapsed = ft._collapsed || false;
+
+                    // Build reel band assignments
+                    const bands = ft.reelBands || [{ setIndex: 0, weight: 1 }];
+
+                    html += `<tr style="background: #0a0a0a; border-bottom: 1px solid #222;">
+                        <td colspan="5" style="padding: 15px 20px;">
+                            <div style="border: 1px solid #333; border-radius: 8px; padding: 15px; background: #111;">
+                                <div class="ft-toggle-header" data-set="${i}" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;">
+                                    <h4 style="color: #ff8c00; margin: 0; font-size: 0.9em;">🎰 Feature Trigger Settings</h4>
+                                    <span style="color: #ff8c00; font-size: 1.2em;">${isCollapsed ? '&#9656;' : '&#9662;'}</span>
+                                </div>
+                                <div class="ft-toggle-body" data-set="${i}" style="margin-top: 12px; ${isCollapsed ? 'display: none;' : ''}">
+                                <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 15px;">
+                                    <label style="display: flex; flex-direction: column; gap: 4px;">
+                                        <span style="font-size: 0.8em; color: #aaa;">Triggering Symbol</span>
+                                        <select class="ft-trigger-sym" data-set="${i}" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 0.9em;">
+                                            ${symbols.map(s => `<option value="${s}" ${s === triggerSym ? 'selected' : ''}>${s}</option>`).join('')}
+                                        </select>
+                                    </label>
+                                    <label style="display: flex; flex-direction: column; gap: 4px;">
+                                        <span style="font-size: 0.8em; color: #aaa;">Min. Scatters</span>
+                                        <input type="number" class="ft-trigger-count" data-set="${i}" value="${triggerCount}" min="1" max="7" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 6px 10px; border-radius: 4px; width: 70px; font-size: 0.9em; text-align: center;">
+                                    </label>
+                                    <label style="display: flex; flex-direction: column; gap: 4px;">
+                                        <span style="font-size: 0.8em; color: #aaa;">Spins Awarded</span>
+                                        <input type="number" class="ft-num-spins" data-set="${i}" value="${numSpins}" min="1" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 6px 10px; border-radius: 4px; width: 70px; font-size: 0.9em; text-align: center;">
+                                    </label>
+                                </div>
+                                <div style="margin-top: 10px;">
+                                    <span style="font-size: 0.85em; color: #aaa; display: block; margin-bottom: 8px;">Reel Bands (weighted):</span>
+                                    <div class="ft-bands-container" data-set="${i}">`;
+
+                    const bandTotalWeight = bands.reduce((s, b) => s + (b.weight || 0), 0);
+                    for (let b = 0; b < bands.length; b++) {
+                        const band = bands[b];
+                        const bandPct = bandTotalWeight > 0 ? ((band.weight / bandTotalWeight) * 100).toFixed(1) : '0';
+                        html += `<div style="display: flex; gap: 10px; align-items: center; margin-bottom: 6px;">
+                            <select class="ft-band-select" data-set="${i}" data-band="${b}" style="background: #000; border: 1px solid #333; color: #fff; padding: 5px 8px; border-radius: 4px; font-size: 0.85em;">
+                                ${gameData.reelSets.map((rs, idx) => `<option value="${idx}" ${idx === band.setIndex ? 'selected' : ''}>${rs.name}</option>`).join('')}
+                            </select>
+                            <input type="number" class="ft-band-weight" data-set="${i}" data-band="${b}" value="${band.weight}" min="0" step="1" style="background: #000; border: 1px solid #333; color: #fff; padding: 5px 8px; border-radius: 4px; width: 60px; font-size: 0.85em; text-align: center;">
+                            <span style="font-size: 0.8em; color: #ff8c00; min-width: 45px;">${bandPct}%</span>
+                            ${bands.length > 1 ? `<button class="ft-band-remove" data-set="${i}" data-band="${b}" style="background: #ff4444; color: #fff; padding: 3px 8px; font-size: 0.75em; border-radius: 4px;">&#10005;</button>` : ''}
+                        </div>`;
+                    }
+
+                    html += `</div>
+                                    <button class="ft-band-add" data-set="${i}" style="margin-top: 8px; padding: 5px 12px; font-size: 0.8em; background: #333; color: #ff8c00; border: 1px solid #ff8c00;">+ Add Reel Band</button>
+                                </div>
+                                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #333;">
+                                    <span style="font-size: 0.85em; color: #aaa; display: block; margin-bottom: 8px;">Retrigger:</span>
+                                    <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px; cursor: pointer;">
+                                        <input type="checkbox" class="ft-retrigger-cb" data-set="${i}" ${ft.retriggerEnabled ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #ff8c00;">
+                                        <span style="font-size: 0.85em; color: #e0e0e0;">Enable Retrigger</span>
+                                    </label>`;
+
+                    if (ft.retriggerEnabled) {
+                        const rtScatters = ft.retriggerScatters || 3;
+                        const rtSpins = ft.retriggerSpins || 5;
+                        const rtBands = ft.retriggerBands || [{ setIndex: 0, weight: 1 }];
+                        const rtBandTotal = rtBands.reduce((s, b) => s + (b.weight || 0), 0);
+
+                        html += `<div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px;">
+                                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                                            <span style="font-size: 0.8em; color: #aaa;">Scatters Required</span>
+                                            <input type="number" class="ft-retrigger-scatters" data-set="${i}" value="${rtScatters}" min="1" max="7" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 5px 8px; border-radius: 4px; width: 60px; font-size: 0.85em; text-align: center;">
+                                        </label>
+                                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                                            <span style="font-size: 0.8em; color: #aaa;">Additional Spins</span>
+                                            <input type="number" class="ft-retrigger-spins" data-set="${i}" value="${rtSpins}" min="1" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 5px 8px; border-radius: 4px; width: 60px; font-size: 0.85em; text-align: center;">
+                                        </label>
+                                    </div>
+                                    <span style="font-size: 0.8em; color: #aaa; display: block; margin-bottom: 6px;">Retrigger Reel Bands:</span>`;
+
+                        for (let rb = 0; rb < rtBands.length; rb++) {
+                            const rband = rtBands[rb];
+                            const rbPct = rtBandTotal > 0 ? ((rband.weight / rtBandTotal) * 100).toFixed(1) : '0';
+                            html += `<div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
+                                <select class="rt-band-select" data-set="${i}" data-band="${rb}" style="background: #000; border: 1px solid #333; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.8em;">
+                                    ${gameData.reelSets.map((rs, idx) => '<option value="' + idx + '"' + (idx === rband.setIndex ? ' selected' : '') + '>' + rs.name + '</option>').join('')}
+                                </select>
+                                <input type="number" class="rt-band-weight" data-set="${i}" data-band="${rb}" value="${rband.weight}" min="0" step="1" style="background: #000; border: 1px solid #333; color: #fff; padding: 4px 8px; border-radius: 4px; width: 55px; font-size: 0.8em; text-align: center;">
+                                <span style="font-size: 0.75em; color: #ff8c00; min-width: 40px;">${rbPct}%</span>
+                                ${rtBands.length > 1 ? '<button class="rt-band-remove" data-set="' + i + '" data-band="' + rb + '" style="background: #ff4444; color: #fff; padding: 2px 6px; font-size: 0.7em; border-radius: 4px; border: none; cursor: pointer;">&#10005;</button>' : ''}
+                            </div>`;
+                        }
+                        html += `<button class="rt-band-add" data-set="${i}" style="margin-top: 6px; padding: 4px 10px; font-size: 0.75em; background: #333; color: #ff8c00; border: 1px solid #ff8c00; border-radius: 4px; cursor: pointer;">+ Add Band</button>`;
+                    }
+                    }
+
+                    // Collect Retrigger
+                    html += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #222;">
+                                    <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px; cursor: pointer;">
+                                        <input type="checkbox" class="ft-collect-cb" data-set="${i}" ${ft.collectEnabled ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: #00cc88;">
+                                        <span style="font-size: 0.85em; color: #e0e0e0;">Collect Retrigger</span>
+                                        <span style="font-size: 0.75em; color: #666;">(retrigger when X symbols collected)</span>
+                                    </label>`;
+
+                    if (ft.collectEnabled) {
+                        const colSymbol = ft.collectSymbol || symbols[0] || 'W';
+                        const colCount = ft.collectCount || 10;
+                        const colSpins = ft.collectSpins || 5;
+                        const colBands = ft.collectBands || [{ setIndex: 0, weight: 1 }];
+                        const colBandTotal = colBands.reduce((s, b) => s + (b.weight || 0), 0);
+
+                        html += `<div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px;">
+                                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                                            <span style="font-size: 0.8em; color: #aaa;">Collect Symbol</span>
+                                            <select class="ft-collect-symbol" data-set="${i}" style="background: #000; border: 1px solid #00cc88; color: #fff; padding: 5px 8px; border-radius: 4px; font-size: 0.85em;">
+                                                ${symbols.map(s => '<option value="' + s + '"' + (s === colSymbol ? ' selected' : '') + '>' + s + '</option>').join('')}
+                                            </select>
+                                        </label>
+                                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                                            <span style="font-size: 0.8em; color: #aaa;">Count Required</span>
+                                            <input type="number" class="ft-collect-count" data-set="${i}" value="${colCount}" min="1" style="background: #000; border: 1px solid #00cc88; color: #fff; padding: 5px 8px; border-radius: 4px; width: 60px; font-size: 0.85em; text-align: center;">
+                                        </label>
+                                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                                            <span style="font-size: 0.8em; color: #aaa;">Additional Spins</span>
+                                            <input type="number" class="ft-collect-spins" data-set="${i}" value="${colSpins}" min="1" style="background: #000; border: 1px solid #00cc88; color: #fff; padding: 5px 8px; border-radius: 4px; width: 60px; font-size: 0.85em; text-align: center;">
+                                        </label>
+                                    </div>
+                                    <span style="font-size: 0.8em; color: #aaa; display: block; margin-bottom: 6px;">Collect Retrigger Reel Bands:</span>`;
+
+                        for (let cb = 0; cb < colBands.length; cb++) {
+                            const cband = colBands[cb];
+                            const cbPct = colBandTotal > 0 ? ((cband.weight / colBandTotal) * 100).toFixed(1) : '0';
+                            html += `<div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
+                                <select class="col-band-select" data-set="${i}" data-band="${cb}" style="background: #000; border: 1px solid #333; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.8em;">
+                                    ${gameData.reelSets.map((rs, idx) => '<option value="' + idx + '"' + (idx === cband.setIndex ? ' selected' : '') + '>' + rs.name + '</option>').join('')}
+                                </select>
+                                <input type="number" class="col-band-weight" data-set="${i}" data-band="${cb}" value="${cband.weight}" min="0" step="1" style="background: #000; border: 1px solid #333; color: #fff; padding: 4px 8px; border-radius: 4px; width: 55px; font-size: 0.8em; text-align: center;">
+                                <span style="font-size: 0.75em; color: #00cc88; min-width: 40px;">${cbPct}%</span>
+                                ${colBands.length > 1 ? '<button class="col-band-remove" data-set="' + i + '" data-band="' + cb + '" style="background: #ff4444; color: #fff; padding: 2px 6px; font-size: 0.7em; border-radius: 4px; border: none; cursor: pointer;">&#10005;</button>' : ''}
+                            </div>`;
+                        }
+                        html += `<button class="col-band-add" data-set="${i}" style="margin-top: 6px; padding: 4px 10px; font-size: 0.75em; background: #333; color: #00cc88; border: 1px solid #00cc88; border-radius: 4px; cursor: pointer;">+ Add Band</button>`;
+                    }
+                    }
+
+                    html += `</div>`;
+
+                    html += `</div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>`;
+                }
+
+                // Modifiers section for this reel set
+                const modifiers = set.modifiers || [];
+                html += `<tr style="background: #0a0a0a; border-bottom: 1px solid #333;">
+                    <td colspan="5" style="padding: 10px 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span style="font-size: 0.85em; color: #aaa;">Modifiers:</span>`;
+
+                // Show active modifiers
+                for (let m = 0; m < modifiers.length; m++) {
+                    const mod = modifiers[m];
+                    if (mod.type === 'multiplierWilds') {
+                        const entries = mod.entries || [];
+                        const summary = entries.map(e => e.multiplier + 'x').join(', ') || 'none set';
+                        html += `<span class="mod-toggle-btn" data-set="${i}" data-mod="${m}" style="background: #1a1a1a; border: 1px solid #ff8c00; border-radius: 6px; padding: 4px 10px; font-size: 0.8em; color: #ff8c00; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                            🎯 Multiplier Wilds (${summary})
+                            <button class="mod-remove-btn" data-set="${i}" data-mod="${m}" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 1em; padding: 0 4px;">&#10005;</button>
+                        </span>`;
+                    } else if (mod.type === 'expandingWilds') {
+                        html += `<span class="mod-toggle-btn" data-set="${i}" data-mod="${m}" style="background: #1a1a1a; border: 1px solid #00cc88; border-radius: 6px; padding: 4px 10px; font-size: 0.8em; color: #00cc88; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                            🔥 Expanding Wilds
+                            <button class="mod-remove-btn" data-set="${i}" data-mod="${m}" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 1em; padding: 0 4px;">&#10005;</button>
+                        </span>`;
+                    }
+                }
+
+                html += `<button class="mod-add-btn" data-set="${i}" style="padding: 5px 12px; font-size: 0.8em; background: #333; color: #ff8c00; border: 1px solid #ff8c00; border-radius: 6px; cursor: pointer;">+ Add Modifier</button>
+                        </div>`;
+
+                // Expanded modifier details
+                for (let m = 0; m < modifiers.length; m++) {
+                    const mod = modifiers[m];
+                    if (mod.type === 'multiplierWilds' && !mod._collapsed) {
+                        const entries = mod.entries || [];
+                        let mwHtml = '<div style="margin-top: 10px; border: 1px solid #333; border-radius: 8px; padding: 12px; background: #111;">';
+                        mwHtml += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">';
+                        mwHtml += '<h4 style="color: #ff8c00; margin: 0; font-size: 0.85em;">Multiplier Wilds</h4>';
+                        mwHtml += '<button class="mod-collapse-btn" data-set="' + i + '" data-mod="' + m + '" style="background: none; border: none; color: #ff8c00; cursor: pointer; font-size: 1.1em;">&#9662;</button>';
+                        mwHtml += '</div>';
+                        mwHtml += '<p style="color: #666; font-size: 0.8em; margin-bottom: 10px;">When a win includes wild(s), a random multiplier is applied. Chances must sum to 1 (100%).</p>';
+                        mwHtml += '<table style="width: 100%; font-size: 0.85em;"><tr><th style="padding: 6px;">Multiplier</th><th style="padding: 6px;">Chance</th><th style="padding: 6px;">Chance %</th><th></th></tr>';
+                        for (let e = 0; e < entries.length; e++) {
+                            mwHtml += '<tr>';
+                            mwHtml += '<td style="padding: 6px;"><input type="number" class="mw-mult" data-set="' + i + '" data-mod="' + m + '" data-entry="' + e + '" value="' + entries[e].multiplier + '" min="1" step="1" style="background: #000; border: 1px solid #333; color: #fff; padding: 4px 8px; border-radius: 4px; width: 60px; text-align: center;"></td>';
+                            mwHtml += '<td style="padding: 6px;"><input type="number" class="mw-chance" data-set="' + i + '" data-mod="' + m + '" data-entry="' + e + '" value="' + entries[e].chance + '" min="0" max="1" step="0.05" style="background: #000; border: 1px solid #333; color: #fff; padding: 4px 8px; border-radius: 4px; width: 70px; text-align: center;"></td>';
+                            mwHtml += '<td style="padding: 6px; color: #aaa;">' + (entries[e].chance * 100).toFixed(1) + '%</td>';
+                            mwHtml += '<td style="padding: 6px;"><button class="mw-remove-entry" data-set="' + i + '" data-mod="' + m + '" data-entry="' + e + '" style="background: none; border: none; color: #ff4444; cursor: pointer;">&#10005;</button></td>';
+                            mwHtml += '</tr>';
+                        }
+                        const totalChance = entries.reduce((s, entry) => s + entry.chance, 0);
+                        const chanceColor = Math.abs(totalChance - 1) < 0.001 ? '#00ff88' : '#ff4444';
+                        mwHtml += '<tr><td colspan="2" style="padding: 6px; text-align: right; color: #aaa;">Total:</td><td style="padding: 6px; color: ' + chanceColor + '; font-weight: bold;">' + (totalChance * 100).toFixed(1) + '%</td><td></td></tr>';
+                        mwHtml += '</table>';
+                        mwHtml += '<button class="mw-add-entry" data-set="' + i + '" data-mod="' + m + '" style="margin-top: 8px; padding: 5px 12px; font-size: 0.8em; background: #333; color: #ff8c00; border: 1px solid #ff8c00; border-radius: 4px;">+ Add Multiplier</button>';
+                        mwHtml += '</div>';
+                        html += mwHtml;
+                    } else if (mod.type === 'expandingWilds' && !mod._collapsed) {
+                        let ewHtml = '<div style="margin-top: 10px; border: 1px solid #333; border-radius: 8px; padding: 12px; background: #111;">';
+                        ewHtml += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">';
+                        ewHtml += '<h4 style="color: #00cc88; margin: 0; font-size: 0.85em;">Expanding Wilds</h4>';
+                        ewHtml += '<button class="mod-collapse-btn" data-set="' + i + '" data-mod="' + m + '" style="background: none; border: none; color: #00cc88; cursor: pointer; font-size: 1.1em;">&#9662;</button>';
+                        ewHtml += '</div>';
+                        ewHtml += '<p style="color: #aaa; font-size: 0.8em;">When a Wild lands on any reel, the entire visible column becomes Wild. This is factored into the RTP calculation automatically.</p>';
+                        ewHtml += '</div>';
+                        html += ewHtml;
+                    }
+                }
+
+                html += `</td></tr>`;
+
+            html += '</table>';
+            html += `<div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button id="rsAddBtn" style="font-size: 0.85em; padding: 8px 16px; background: #ff8c00; color: #fff;">+ Add Reel Set</button>
+                <button id="rsDuplicateBtn" style="font-size: 0.85em; padding: 8px 16px; background: #333; color: #ff8c00; border: 1px solid #ff8c00;">📋 Duplicate Active</button>
+            </div>`;
+
+            container.innerHTML = html;
+
+            // Bind events
+            container.querySelectorAll('.rs-name-input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    gameData.reelSets[parseInt(e.target.dataset.set)].name = e.target.value;
+                });
+            });
+
+            container.querySelectorAll('.rs-weight-input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].weight = Math.max(0, parseFloat(e.target.value) || 0);
+                    renderCustomReelSetsPanel();
+                    if (typeof runEvaluation === 'function') runEvaluation();
+                });
+            });
+
+            // Feature checkbox
+            container.querySelectorAll('.rs-feature-cb').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    if (!gameData.reelSets[idx].featureTrigger) {
+                        gameData.reelSets[idx].featureTrigger = {};
+                    }
+                    gameData.reelSets[idx].featureTrigger.enabled = e.target.checked;
+                    if (e.target.checked && !gameData.reelSets[idx].featureTrigger.reelBands) {
+                        // Initialize defaults
+                        const symbols = gameData.paytable.map(s => s.symbol);
+                        gameData.reelSets[idx].featureTrigger.triggerSymbol = symbols[symbols.length - 1] || 'S';
+                        gameData.reelSets[idx].featureTrigger.triggerCount = 3;
+                        gameData.reelSets[idx].featureTrigger.numSpins = 10;
+                        gameData.reelSets[idx].featureTrigger.reelBands = [{ setIndex: 0, weight: 1 }];
+                    }
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Feature toggle collapse/expand
+            container.querySelectorAll('.ft-toggle-header').forEach(header => {
+                header.addEventListener('click', function() {
+                    const idx = parseInt(this.getAttribute('data-set'));
+                    gameData.reelSets[idx].featureTrigger._collapsed = !gameData.reelSets[idx].featureTrigger._collapsed;
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Feature trigger settings
+            container.querySelectorAll('.ft-trigger-sym').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.triggerSymbol = e.target.value;
+                });
+            });
+
+            container.querySelectorAll('.ft-trigger-count').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.triggerCount = parseInt(e.target.value) || 3;
+                });
+            });
+
+            container.querySelectorAll('.ft-num-spins').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.numSpins = parseInt(e.target.value) || 10;
+                });
+            });
+
+            // Reel band selects
+            container.querySelectorAll('.ft-band-select').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const bandIdx = parseInt(e.target.dataset.band);
+                    gameData.reelSets[idx].featureTrigger.reelBands[bandIdx].setIndex = parseInt(e.target.value);
+                });
+            });
+
+            container.querySelectorAll('.ft-band-weight').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const bandIdx = parseInt(e.target.dataset.band);
+                    gameData.reelSets[idx].featureTrigger.reelBands[bandIdx].weight = Math.max(0, parseFloat(e.target.value) || 0);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Remove reel band
+            container.querySelectorAll('.ft-band-remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const bandIdx = parseInt(e.target.dataset.band);
+                    gameData.reelSets[idx].featureTrigger.reelBands.splice(bandIdx, 1);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Add reel band
+            container.querySelectorAll('.ft-band-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.reelBands.push({ setIndex: 0, weight: 1 });
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Retrigger bindings
+            container.querySelectorAll('.ft-retrigger-cb').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.retriggerEnabled = e.target.checked;
+                    if (e.target.checked) {
+                        if (!gameData.reelSets[idx].featureTrigger.retriggerScatters) {
+                            gameData.reelSets[idx].featureTrigger.retriggerScatters = 3;
+                        }
+                        if (!gameData.reelSets[idx].featureTrigger.retriggerSpins) {
+                            gameData.reelSets[idx].featureTrigger.retriggerSpins = 5;
+                        }
+                        if (!gameData.reelSets[idx].featureTrigger.retriggerBands) {
+                            gameData.reelSets[idx].featureTrigger.retriggerBands = [{ setIndex: 0, weight: 1 }];
+                        }
+                    }
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.ft-retrigger-scatters').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.retriggerScatters = parseInt(e.target.value) || 3;
+                });
+            });
+
+            container.querySelectorAll('.ft-retrigger-spins').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.retriggerSpins = parseInt(e.target.value) || 5;
+                });
+            });
+
+            container.querySelectorAll('.ft-retrigger-set').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    // Legacy: update retriggerSetIndex from first band
+                    if (gameData.reelSets[idx].featureTrigger.retriggerBands) {
+                        gameData.reelSets[idx].featureTrigger.retriggerSetIndex = gameData.reelSets[idx].featureTrigger.retriggerBands[0].setIndex;
+                    }
+                });
+            });
+
+            // Retrigger bands
+            container.querySelectorAll('.rt-band-select').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const bandIdx = parseInt(e.target.dataset.band);
+                    if (!gameData.reelSets[idx].featureTrigger.retriggerBands) gameData.reelSets[idx].featureTrigger.retriggerBands = [{ setIndex: 0, weight: 1 }];
+                    gameData.reelSets[idx].featureTrigger.retriggerBands[bandIdx].setIndex = parseInt(e.target.value);
+                    gameData.reelSets[idx].featureTrigger.retriggerSetIndex = gameData.reelSets[idx].featureTrigger.retriggerBands[0].setIndex;
+                });
+            });
+
+            container.querySelectorAll('.rt-band-weight').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const bandIdx = parseInt(e.target.dataset.band);
+                    gameData.reelSets[idx].featureTrigger.retriggerBands[bandIdx].weight = Math.max(0, parseFloat(e.target.value) || 0);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.rt-band-remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const bandIdx = parseInt(e.target.dataset.band);
+                    gameData.reelSets[idx].featureTrigger.retriggerBands.splice(bandIdx, 1);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.rt-band-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    if (!gameData.reelSets[idx].featureTrigger.retriggerBands) gameData.reelSets[idx].featureTrigger.retriggerBands = [];
+                    gameData.reelSets[idx].featureTrigger.retriggerBands.push({ setIndex: 0, weight: 1 });
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Collect retrigger bindings
+            container.querySelectorAll('.ft-collect-cb').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.collectEnabled = e.target.checked;
+                    if (e.target.checked) {
+                        const ft2 = gameData.reelSets[idx].featureTrigger;
+                        if (!ft2.collectSymbol) ft2.collectSymbol = gameData.paytable[0] ? gameData.paytable[0].symbol : 'W';
+                        if (!ft2.collectCount) ft2.collectCount = 10;
+                        if (!ft2.collectSpins) ft2.collectSpins = 5;
+                        if (!ft2.collectBands) ft2.collectBands = [{ setIndex: 0, weight: 1 }];
+                    }
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.ft-collect-symbol').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.collectSymbol = e.target.value;
+                });
+            });
+
+            container.querySelectorAll('.ft-collect-count').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.collectCount = parseInt(e.target.value) || 10;
+                });
+            });
+
+            container.querySelectorAll('.ft-collect-spins').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].featureTrigger.collectSpins = parseInt(e.target.value) || 5;
+                });
+            });
+
+            container.querySelectorAll('.ft-collect-set').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    if (gameData.reelSets[idx].featureTrigger.collectBands) {
+                        gameData.reelSets[idx].featureTrigger.collectSetIndex = gameData.reelSets[idx].featureTrigger.collectBands[0].setIndex;
+                    }
+                });
+            });
+
+            // Collect retrigger bands
+            container.querySelectorAll('.col-band-select').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const bandIdx = parseInt(e.target.dataset.band);
+                    if (!gameData.reelSets[idx].featureTrigger.collectBands) gameData.reelSets[idx].featureTrigger.collectBands = [{ setIndex: 0, weight: 1 }];
+                    gameData.reelSets[idx].featureTrigger.collectBands[bandIdx].setIndex = parseInt(e.target.value);
+                    gameData.reelSets[idx].featureTrigger.collectSetIndex = gameData.reelSets[idx].featureTrigger.collectBands[0].setIndex;
+                });
+            });
+
+            container.querySelectorAll('.col-band-weight').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const bandIdx = parseInt(e.target.dataset.band);
+                    gameData.reelSets[idx].featureTrigger.collectBands[bandIdx].weight = Math.max(0, parseFloat(e.target.value) || 0);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.col-band-remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const bandIdx = parseInt(e.target.dataset.band);
+                    gameData.reelSets[idx].featureTrigger.collectBands.splice(bandIdx, 1);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.col-band-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    if (!gameData.reelSets[idx].featureTrigger.collectBands) gameData.reelSets[idx].featureTrigger.collectBands = [];
+                    gameData.reelSets[idx].featureTrigger.collectBands.push({ setIndex: 0, weight: 1 });
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Modifier bindings
+            container.querySelectorAll('.mod-add-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const modType = prompt('Select modifier type:\n\n1. Multiplier Wilds\n2. Expanding Wilds\n\nEnter number:');
+                    if (modType === '1') {
+                        if (!gameData.reelSets[idx].modifiers) gameData.reelSets[idx].modifiers = [];
+                        gameData.reelSets[idx].modifiers.push({
+                            type: 'multiplierWilds',
+                            _collapsed: false,
+                            entries: [
+                                { multiplier: 2, chance: 0.5 },
+                                { multiplier: 3, chance: 0.3 },
+                                { multiplier: 5, chance: 0.2 }
+                            ]
+                        });
+                        syncModifiersToEngine(idx);
+                        renderCustomReelSetsPanel();
+                    } else if (modType === '2') {
+                        if (!gameData.reelSets[idx].modifiers) gameData.reelSets[idx].modifiers = [];
+                        gameData.reelSets[idx].modifiers.push({
+                            type: 'expandingWilds',
+                            _collapsed: true
+                        });
+                        syncModifiersToEngine(idx);
+                        renderCustomReelSetsPanel();
+                    }
+                });
+            });
+
+            container.querySelectorAll('.mod-remove-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = parseInt(e.target.dataset.set);
+                    const modIdx = parseInt(e.target.dataset.mod);
+                    gameData.reelSets[idx].modifiers.splice(modIdx, 1);
+                    syncModifiersToEngine(idx);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.mod-toggle-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('mod-remove-btn')) return;
+                    const idx = parseInt(btn.dataset.set);
+                    const modIdx = parseInt(btn.dataset.mod);
+                    gameData.reelSets[idx].modifiers[modIdx]._collapsed = !gameData.reelSets[idx].modifiers[modIdx]._collapsed;
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.mod-collapse-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.dataset.set);
+                    const modIdx = parseInt(e.currentTarget.dataset.mod);
+                    gameData.reelSets[idx].modifiers[modIdx]._collapsed = !gameData.reelSets[idx].modifiers[modIdx]._collapsed;
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.mw-mult').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const modIdx = parseInt(e.target.dataset.mod);
+                    const entryIdx = parseInt(e.target.dataset.entry);
+                    gameData.reelSets[idx].modifiers[modIdx].entries[entryIdx].multiplier = parseInt(e.target.value) || 1;
+                    syncModifiersToEngine(idx);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.mw-chance').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const modIdx = parseInt(e.target.dataset.mod);
+                    const entryIdx = parseInt(e.target.dataset.entry);
+                    gameData.reelSets[idx].modifiers[modIdx].entries[entryIdx].chance = parseFloat(e.target.value) || 0;
+                    syncModifiersToEngine(idx);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.mw-remove-entry').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const modIdx = parseInt(e.target.dataset.mod);
+                    const entryIdx = parseInt(e.target.dataset.entry);
+                    gameData.reelSets[idx].modifiers[modIdx].entries.splice(entryIdx, 1);
+                    syncModifiersToEngine(idx);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.mw-add-entry').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const modIdx = parseInt(e.target.dataset.mod);
+                    gameData.reelSets[idx].modifiers[modIdx].entries.push({ multiplier: 2, chance: 0.1 });
+                    syncModifiersToEngine(idx);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.rs-edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    showEditView(parseInt(e.target.dataset.set));
+                });
+            });
+
+            container.querySelectorAll('.rs-data-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    showDataView(parseInt(e.target.dataset.set));
+                });
+            });
+
+            container.querySelectorAll('.rs-delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    if (!confirm(`Delete reel set "${gameData.reelSets[idx].name}"?`)) return;
+                    gameData.reelSets.splice(idx, 1);
+                    if (gameData.activeReelSet >= gameData.reelSets.length) {
+                        gameData.activeReelSet = gameData.reelSets.length - 1;
+                    }
+                    if (typeof switchToReelSet === 'function') switchToReelSet(gameData.activeReelSet);
+                    if (typeof runEvaluation === 'function') runEvaluation();
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            const addBtn = document.getElementById('rsAddBtn');
+            if (addBtn) {
+                addBtn.addEventListener('click', () => {
+                    // Open wizard for new reel set, defaulting to base game values
+                    wizAddingReelSet = true;
+                    const config = getConfig();
+                    document.getElementById('wizReels').value = config.numReels;
+                    document.getElementById('wizRows').value = config.numRows;
+
+                    // Copy base game win lines as default
+                    wizWinLines = gameData.winLines.map(l => [...l]);
+                    wizCurrentLine = 0;
+
+                    // Copy base game paytable as default
+                    wizPaytableData = gameData.paytable.map(entry => ({
+                        symbol: entry.symbol,
+                        pays: { ...entry.pays },
+                        isWild: entry.symbol === config.wildSymbol,
+                        isFeature: entry.symbol === config.scatterSymbol,
+                        weight: 0
+                    }));
+                    // Calculate weights from base game symbol counts
+                    const baseSet = gameData.reelSets[0];
+                    if (baseSet && baseSet.reelStrips && baseSet.reelStrips[0]) {
+                        const totalStops = baseSet.reelStrips[0].length;
+                        for (const entry of wizPaytableData) {
+                            const count = baseSet.reelStrips[0].filter(s => s === entry.symbol).length;
+                            entry.weight = totalStops > 0 ? parseFloat(((count / totalStops) * 100).toFixed(1)) : 0;
+                        }
+                    } else {
+                        // Even distribution
+                        const evenWeight = parseFloat((100 / wizPaytableData.length).toFixed(1));
+                        wizPaytableData.forEach(e => e.weight = evenWeight);
+                    }
+
+                    // Show wizard
+                    mainApp.style.display = 'none';
+                    wizardScreen.style.display = 'block';
+                    document.getElementById('wizardStep1').style.display = 'block';
+                    document.getElementById('wizardStep2').style.display = 'none';
+                    document.getElementById('wizardStep3').style.display = 'none';
+                    renderWizPreview();
+                });
+            }
+
+            const dupBtn = document.getElementById('rsDuplicateBtn');
+            if (dupBtn) {
+                dupBtn.addEventListener('click', () => {
+                    const src = gameData.reelSets[gameData.activeReelSet];
+                    const copy = JSON.parse(JSON.stringify(src));
+                    copy.name = src.name + ' (copy)';
+                    gameData.reelSets.push(copy);
+                    if (typeof switchToReelSet === 'function') switchToReelSet(gameData.reelSets.length - 1);
+                    if (typeof runEvaluation === 'function') runEvaluation();
+                    renderCustomReelSetsPanel();
+                });
+            }
+        }
+
+        // Expose renderCustomReelSetsPanel globally for the override script
+        window._renderCustomReelSetsPanel = renderCustomReelSetsPanel;
+
+        // ============ WIZARD LOGIC ============
+        const wizReels = document.getElementById('wizReels');
+        const wizRows = document.getElementById('wizRows');
+        const wizPreview = document.getElementById('wizPreview');
+        const wizStep1Next = document.getElementById('wizStep1Next');
+        const wizardStep1 = document.getElementById('wizardStep1');
+        const wizardStep2 = document.getElementById('wizardStep2');
+
+        let wizWinLines = [[1, 1, 1, 1, 1]]; // default first line: all row 1
+        let wizCurrentLine = 0;
+        let wizAddingReelSet = false; // true when adding a new reel set vs initial creation
+
+        function renderWizPreview() {
+            const reels = parseInt(wizReels.value);
+            const rows = parseInt(wizRows.value);
+            wizPreview.style.gridTemplateColumns = `repeat(${reels}, 50px)`;
+            wizPreview.innerHTML = '';
+            for (let row = 0; row < rows; row++) {
+                for (let reel = 0; reel < reels; reel++) {
+                    const cell = document.createElement('div');
+                    cell.style.cssText = 'width: 50px; height: 40px; background: #222; border: 1px solid #444; border-radius: 4px;';
+                    wizPreview.appendChild(cell);
+                }
+            }
+        }
+
+        wizReels.addEventListener('input', renderWizPreview);
+        wizRows.addEventListener('input', renderWizPreview);
+
+        // Step 1 → Step 2
+        wizStep1Next.addEventListener('click', () => {
+            const reels = parseInt(wizReels.value);
+            const rows = parseInt(wizRows.value);
+            // Only initialize win lines if not pre-populated (i.e. fresh new PAR)
+            if (!wizAddingReelSet || wizWinLines.length === 0) {
+                wizWinLines = [new Array(reels).fill(1)];
+            }
+            wizCurrentLine = 0;
+            wizardStep1.style.display = 'none';
+            wizardStep2.style.display = 'block';
+            renderWizLineGrid();
+            renderWizLinesList();
+        });
+
+        // Step 2 → Step 1
+        document.getElementById('wizBack').addEventListener('click', () => {
+            wizardStep2.style.display = 'none';
+            wizardStep1.style.display = 'block';
+        });
+
+        function renderWizLineGrid() {
+            const reels = parseInt(wizReels.value);
+            const rows = parseInt(wizRows.value);
+            const grid = document.getElementById('wizLineGrid');
+            grid.style.gridTemplateColumns = `repeat(${reels}, 50px)`;
+            grid.innerHTML = '';
+
+            const line = wizWinLines[wizCurrentLine];
+
+            for (let row = 1; row <= rows; row++) {
+                for (let reel = 0; reel < reels; reel++) {
+                    const cell = document.createElement('div');
+                    const isSelected = line[reel] === row;
+                    cell.style.cssText = `width: 50px; height: 40px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8em; transition: all 0.15s; ${isSelected ? 'background: #ff8c00; color: #000; border: 2px solid #ff8c00;' : 'background: #222; border: 1px solid #444; color: #666;'}`;
+                    cell.textContent = isSelected ? `R${reel + 1}` : '';
+                    cell.addEventListener('click', () => {
+                        wizWinLines[wizCurrentLine][reel] = row;
+                        renderWizLineGrid();
+                        renderWizLinesList();
+                    });
+                    grid.appendChild(cell);
+                }
+            }
+
+            document.getElementById('wizCurrentLineNum').textContent = wizCurrentLine + 1;
+            document.getElementById('wizTotalLines').textContent = wizWinLines.length;
+        }
+
+        function renderWizLinesList() {
+            const list = document.getElementById('wizLinesList');
+            list.innerHTML = '';
+
+            // Find duplicates
+            const lineCounts = {};
+            wizWinLines.forEach((line) => {
+                const key = line.join(',');
+                lineCounts[key] = (lineCounts[key] || 0) + 1;
+            });
+
+            wizWinLines.forEach((line, i) => {
+                const key = line.join(',');
+                const isDuplicate = lineCounts[key] > 1;
+                const row = document.createElement('div');
+                let style = `padding: 6px 10px; margin-bottom: 3px; border-radius: 4px; font-size: 0.85em; cursor: pointer; `;
+                if (i === wizCurrentLine) {
+                    style += 'background: #ff8c00; color: #000; font-weight: bold;';
+                } else if (isDuplicate) {
+                    style += 'background: #331111; color: #ff6666; border: 1px solid #ff4444;';
+                } else {
+                    style += 'background: #111; color: #aaa;';
+                }
+                row.style.cssText = style;
+                row.textContent = `Line ${i + 1}: [${line.join(', ')}]${isDuplicate ? ' ⚠️ DUPLICATE' : ''}`;
+                row.addEventListener('click', () => {
+                    wizCurrentLine = i;
+                    renderWizLineGrid();
+                    renderWizLinesList();
+                });
+                list.appendChild(row);
+            });
+
+            // Scroll selected into view
+            const selectedEl = list.children[wizCurrentLine];
+            if (selectedEl) {
+                selectedEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+
+        document.getElementById('wizAddLine').addEventListener('click', () => {
+            const reels = parseInt(wizReels.value);
+            const newLine = new Array(reels).fill(1);
+            // Check for duplicate
+            const isDuplicate = wizWinLines.some(line => line.join(',') === newLine.join(','));
+            if (isDuplicate) {
+                // Still add it but it will be edited — duplicates checked on finish
+            }
+            wizWinLines.push(newLine);
+            wizCurrentLine = wizWinLines.length - 1;
+            renderWizLineGrid();
+            renderWizLinesList();
+        });
+
+        document.getElementById('wizRemoveLine').addEventListener('click', () => {
+            if (wizWinLines.length <= 1) return;
+            wizWinLines.splice(wizCurrentLine, 1);
+            if (wizCurrentLine >= wizWinLines.length) wizCurrentLine = wizWinLines.length - 1;
+            renderWizLineGrid();
+            renderWizLinesList();
+        });
+
+        document.getElementById('wizPrevLine').addEventListener('click', () => {
+            if (wizCurrentLine > 0) {
+                wizCurrentLine--;
+                renderWizLineGrid();
+                renderWizLinesList();
+            }
+        });
+
+        document.getElementById('wizNextLine').addEventListener('click', () => {
+            if (wizCurrentLine < wizWinLines.length - 1) {
+                wizCurrentLine++;
+                renderWizLineGrid();
+                renderWizLinesList();
+            }
+        });
+
+        // Keyboard up/down navigation for win lines
+        document.addEventListener('keydown', (e) => {
+            // Only respond when wizard screen AND step 2 are both visible
+            if (wizardScreen.style.display === 'none' || wizardScreen.style.display === '') return;
+            if (wizardStep2.style.display === 'none') return;
+            // Don't interfere with inputs
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (wizCurrentLine > 0) {
+                    wizCurrentLine--;
+                    renderWizLineGrid();
+                    renderWizLinesList();
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (wizCurrentLine < wizWinLines.length - 1) {
+                    wizCurrentLine++;
+                    renderWizLineGrid();
+                    renderWizLinesList();
+                }
+            }
+        });
+
+        // ============ STEP 3: PAYTABLE ============
+        let wizPaytableData = [
+            { symbol: 'J', pays: {}, isWild: false, isFeature: false, weight: 15 },
+            { symbol: 'Q', pays: {}, isWild: false, isFeature: false, weight: 15 },
+            { symbol: 'K', pays: {}, isWild: false, isFeature: false, weight: 12 },
+            { symbol: 'A', pays: {}, isWild: false, isFeature: false, weight: 12 },
+            { symbol: 'M2', pays: {}, isWild: false, isFeature: false, weight: 10 },
+            { symbol: 'M1', pays: {}, isWild: false, isFeature: false, weight: 10 },
+            { symbol: 'H3', pays: {}, isWild: false, isFeature: false, weight: 8 },
+            { symbol: 'H2', pays: {}, isWild: false, isFeature: false, weight: 7 },
+            { symbol: 'H1', pays: {}, isWild: false, isFeature: false, weight: 5 },
+            { symbol: 'W', pays: {}, isWild: true, isFeature: false, weight: 3 },
+            { symbol: 'S', pays: {}, isWild: false, isFeature: true, weight: 3 },
+        ];
+        let wizSelectedRow = -1;
+
+        // Step 2 → Step 3
+        document.getElementById('wizStep2Next').addEventListener('click', () => {
+            // Check for duplicates
+            const seen = new Set();
+            let hasDuplicates = false;
+            for (const line of wizWinLines) {
+                const key = line.join(',');
+                if (seen.has(key)) { hasDuplicates = true; break; }
+                seen.add(key);
+            }
+            if (hasDuplicates) {
+                alert('You have duplicate win lines. Please make each line unique before proceeding.');
+                return;
+            }
+            wizardStep2.style.display = 'none';
+            document.getElementById('wizardStep3').style.display = 'block';
+            renderWizPaytable();
+        });
+
+        // Step 3 → Step 2
+        document.getElementById('wizBack2').addEventListener('click', () => {
+            document.getElementById('wizardStep3').style.display = 'none';
+            wizardStep2.style.display = 'block';
+        });
+
+        function renderWizPaytable() {
+            const reels = parseInt(wizReels.value);
+            const thead = document.getElementById('wizPaytableHead');
+            const tbody = document.getElementById('wizPaytableBody');
+
+            // Calculate total weight
+            const totalWeight = wizPaytableData.reduce((sum, e) => sum + (e.weight || 0), 0);
+
+            // Build header
+            let headerHtml = '<tr><th style="padding: 8px 10px;">#</th><th style="padding: 8px 10px;">Symbol</th>';
+            for (let i = 3; i <= reels; i++) {
+                headerHtml += `<th style="padding: 8px 10px;">${i} of a Kind</th>`;
+            }
+            headerHtml += `<th style="padding: 8px 10px;">Weight %</th>`;
+            headerHtml += '<th style="padding: 8px 10px;">Wild</th><th style="padding: 8px 10px;">Feature</th></tr>';
+            thead.innerHTML = headerHtml;
+
+            // Build rows
+            tbody.innerHTML = '';
+            wizPaytableData.forEach((entry, idx) => {
+                const isSelected = idx === wizSelectedRow;
+                const tr = document.createElement('tr');
+                tr.style.cssText = isSelected ? 'background: #1a1a1a; border-left: 3px solid #ff8c00;' : '';
+                tr.addEventListener('click', () => {
+                    wizSelectedRow = idx;
+                    renderWizPaytable();
+                });
+
+                // Row number
+                const tdNum = document.createElement('td');
+                tdNum.style.cssText = 'padding: 8px 10px; color: #666; font-size: 0.8em;';
+                tdNum.textContent = idx + 1;
+                tr.appendChild(tdNum);
+
+                // Symbol name (editable)
+                const tdSym = document.createElement('td');
+                tdSym.style.cssText = 'padding: 8px 10px;';
+                const symInput = document.createElement('input');
+                symInput.type = 'text';
+                symInput.value = entry.symbol;
+                symInput.style.cssText = 'background: #111; border: 1px solid #333; color: #fff; padding: 5px 8px; border-radius: 4px; width: 70px; font-size: 0.9em; font-weight: bold; text-align: center;';
+                symInput.addEventListener('change', (e) => {
+                    wizPaytableData[idx].symbol = e.target.value.trim() || entry.symbol;
+                });
+                symInput.addEventListener('click', (e) => e.stopPropagation());
+                tdSym.appendChild(symInput);
+                tr.appendChild(tdSym);
+
+                // Pay columns
+                for (let len = 3; len <= reels; len++) {
+                    const td = document.createElement('td');
+                    td.style.cssText = 'padding: 8px 10px;';
+                    const payInput = document.createElement('input');
+                    payInput.type = 'number';
+                    payInput.step = '0.1';
+                    payInput.min = '0';
+                    payInput.value = entry.pays[len] || 0;
+                    payInput.style.cssText = 'background: #111; border: 1px solid #333; color: #fff; padding: 5px 8px; border-radius: 4px; width: 70px; font-size: 0.9em; text-align: center;';
+                    payInput.addEventListener('change', (e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        if (val > 0) {
+                            wizPaytableData[idx].pays[len] = val;
+                        } else {
+                            delete wizPaytableData[idx].pays[len];
+                        }
+                    });
+                    payInput.addEventListener('click', (e) => e.stopPropagation());
+                    td.appendChild(payInput);
+                    tr.appendChild(td);
+                }
+
+                // Weight column
+                const tdWeight = document.createElement('td');
+                tdWeight.style.cssText = 'padding: 8px 10px;';
+                const weightInput = document.createElement('input');
+                weightInput.type = 'number';
+                weightInput.step = '0.5';
+                weightInput.min = '0';
+                weightInput.value = entry.weight || 0;
+                weightInput.style.cssText = 'background: #111; border: 1px solid #333; color: #fff; padding: 5px 8px; border-radius: 4px; width: 65px; font-size: 0.9em; text-align: center;';
+                weightInput.addEventListener('change', (e) => {
+                    wizPaytableData[idx].weight = parseFloat(e.target.value) || 0;
+                    renderWizPaytable();
+                });
+                weightInput.addEventListener('click', (e) => e.stopPropagation());
+                tdWeight.appendChild(weightInput);
+                tr.appendChild(tdWeight);
+
+                // Wild checkbox
+                const tdWild = document.createElement('td');
+                tdWild.style.cssText = 'padding: 8px 10px; text-align: center;';
+                const wildCb = document.createElement('input');
+                wildCb.type = 'checkbox';
+                wildCb.checked = entry.isWild;
+                wildCb.style.cssText = 'width: 18px; height: 18px; accent-color: #ff8c00; cursor: pointer;';
+                wildCb.addEventListener('change', (e) => {
+                    wizPaytableData[idx].isWild = e.target.checked;
+                });
+                wildCb.addEventListener('click', (e) => e.stopPropagation());
+                tdWild.appendChild(wildCb);
+                tr.appendChild(tdWild);
+
+                // Feature checkbox
+                const tdFeat = document.createElement('td');
+                tdFeat.style.cssText = 'padding: 8px 10px; text-align: center;';
+                const featCb = document.createElement('input');
+                featCb.type = 'checkbox';
+                featCb.checked = entry.isFeature;
+                featCb.style.cssText = 'width: 18px; height: 18px; accent-color: #ff8c00; cursor: pointer;';
+                featCb.addEventListener('change', (e) => {
+                    wizPaytableData[idx].isFeature = e.target.checked;
+                });
+                featCb.addEventListener('click', (e) => e.stopPropagation());
+                tdFeat.appendChild(featCb);
+                tr.appendChild(tdFeat);
+
+                tbody.appendChild(tr);
+            });
+
+            // Total weight row
+            const totalRow = document.createElement('tr');
+            totalRow.style.cssText = 'border-top: 2px solid #333;';
+            const totalColSpan = 2 + (reels - 2); // #, Symbol, pay columns
+            const tdLabel = document.createElement('td');
+            tdLabel.colSpan = totalColSpan;
+            tdLabel.style.cssText = 'padding: 10px; text-align: right; font-weight: bold; color: #aaa;';
+            tdLabel.textContent = 'Total:';
+            totalRow.appendChild(tdLabel);
+
+            const tdTotal = document.createElement('td');
+            tdTotal.style.cssText = `padding: 10px; font-weight: bold; font-size: 1.1em; ${Math.abs(totalWeight - 100) < 0.01 ? 'color: #00ff88;' : 'color: #ff4444;'}`;
+            tdTotal.textContent = `${totalWeight.toFixed(1)}%`;
+            totalRow.appendChild(tdTotal);
+
+            const tdEmpty1 = document.createElement('td');
+            totalRow.appendChild(tdEmpty1);
+            const tdEmpty2 = document.createElement('td');
+            totalRow.appendChild(tdEmpty2);
+            tbody.appendChild(totalRow);
+        }
+
+        // Add symbol
+        document.getElementById('wizAddSymbol').addEventListener('click', () => {
+            const id = document.getElementById('wizNewSymbolId').value.trim();
+            if (!id) return;
+            wizPaytableData.push({ symbol: id, pays: {}, isWild: false, isFeature: false, weight: 0 });
+            document.getElementById('wizNewSymbolId').value = '';
+            renderWizPaytable();
+        });
+
+        // Remove selected symbol
+        document.getElementById('wizRemoveSymbol').addEventListener('click', () => {
+            if (wizSelectedRow < 0 || wizSelectedRow >= wizPaytableData.length) return;
+            wizPaytableData.splice(wizSelectedRow, 1);
+            wizSelectedRow = -1;
+            renderWizPaytable();
+        });
+
+        // Finish wizard → generate PAR or add reel set
+        document.getElementById('wizFinish').addEventListener('click', () => {
+            const reels = parseInt(wizReels.value);
+            const rows = parseInt(wizRows.value);
+
+            // Validate weights
+            const totalWeight = wizPaytableData.reduce((sum, e) => sum + (e.weight || 0), 0);
+            if (Math.abs(totalWeight - 100) > 0.5) {
+                alert(`Symbol weights must add up to 100%. Currently: ${totalWeight.toFixed(1)}%`);
+                return;
+            }
+
+            // Shared helper: build reel strips from weights
+            function buildReelStrips(numReels, paytableData) {
+                const defaultStops = 99;
+                const symbols = paytableData.map(e => e.symbol);
+                const weights = paytableData.map(e => e.weight || 0);
+                const strips = [];
+                for (let r = 0; r < numReels; r++) {
+                    const strip = [];
+                    let allocated = 0;
+                    const finalCounts = weights.map((w, i) => {
+                        if (i === weights.length - 1) return defaultStops - allocated;
+                        const count = Math.round((w / 100) * defaultStops);
+                        allocated += count;
+                        return count;
+                    });
+                    for (let i = 0; i < symbols.length; i++) {
+                        for (let j = 0; j < finalCounts[i]; j++) {
+                            strip.push(symbols[i]);
+                        }
+                    }
+                    // Shuffle
+                    for (let i = strip.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [strip[i], strip[j]] = [strip[j], strip[i]];
+                    }
+                    strips.push(strip);
+                }
+                return strips;
+            }
+
+            if (wizAddingReelSet) {
+                // === ADDING A NEW REEL SET ===
+                const newStrips = buildReelStrips(reels, wizPaytableData);
+
+                const symbolCounts = {};
+                for (let reel = 0; reel < reels; reel++) {
+                    for (const sym of newStrips[reel]) {
+                        if (!symbolCounts[sym]) symbolCounts[sym] = new Array(reels).fill(0);
+                        symbolCounts[sym][reel]++;
+                    }
+                }
+
+                gameData.reelSets.push({
+                    name: 'Reel Set ' + (gameData.reelSets.length + 1),
+                    weight: 1,
+                    reelStrips: newStrips,
+                    symbolCounts: symbolCounts,
+                    wildMultipliers: [],
+                    featureTrigger: { enabled: false, targetSetIndex: -1, awards: [], globalMultiplier: 1, retrigger: true }
+                });
+
+                // Update paytable with any pay changes
+                for (const entry of wizPaytableData) {
+                    const existing = gameData.paytable.find(e => e.symbol === entry.symbol);
+                    if (!existing) {
+                        gameData.paytable.push({ symbol: entry.symbol, pays: { ...entry.pays } });
+                    }
+                }
+
+                if (typeof switchToReelSet === 'function') switchToReelSet(gameData.reelSets.length - 1);
+                if (typeof runEvaluation === 'function') runEvaluation();
+
+                wizardScreen.style.display = 'none';
+                mainApp.style.display = 'block';
+                wizAddingReelSet = false;
+                showMainView();
+
+            } else {
+                // === INITIAL CREATION ===
+                document.getElementById('numReels').value = reels;
+                document.getElementById('numRows').value = rows;
+                document.getElementById('numLines').value = wizWinLines.length;
+
+                const wildSymbols = wizPaytableData.filter(e => e.isWild).map(e => e.symbol);
+                document.getElementById('wildSymbol').value = wildSymbols[0] || 'W';
+                const featureSymbols = wizPaytableData.filter(e => e.isFeature).map(e => e.symbol);
+                document.getElementById('scatterSymbol').value = featureSymbols[0] || 'S';
+
+                wizardScreen.style.display = 'none';
+                mainApp.style.display = 'block';
+
+                // Set paytable directly from wizard
+                gameData.paytable = wizPaytableData.map(entry => ({
+                    symbol: entry.symbol,
+                    pays: { ...entry.pays }
+                }));
+
+                // Set win lines directly from wizard
+                gameData.winLines = wizWinLines.map(l => [...l]);
+
+                // Build reel strips using weights
+                gameData.reelStrips = buildReelStrips(reels, wizPaytableData);
+
+                // Calculate symbol counts
+                gameData.symbolCounts = {};
+                for (let reel = 0; reel < reels; reel++) {
+                    for (const sym of gameData.reelStrips[reel]) {
+                        if (!gameData.symbolCounts[sym]) gameData.symbolCounts[sym] = new Array(reels).fill(0);
+                        gameData.symbolCounts[sym][reel]++;
+                    }
+                }
+
+                // Reset reel sets
+                gameData.reelSets = [];
+                gameData.activeReelSet = 0;
+
+                // Run evaluation (which will call initializeReelSets internally)
+                runEvaluation();
+            }
+        });
+    </script>
 </body>
 </html>

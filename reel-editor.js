@@ -500,3 +500,56 @@ function recalculateSymbolCounts() {
 // ============ HOOK INTO TAB SYSTEM ============
 // The reel editor is initialized when its tab is activated (handled in par-evaluator.js)
 // This ensures the editor refreshes when data changes while the editor tab is visible.
+
+// ============ KEYBOARD NAVIGATION ============
+document.addEventListener('keydown', function(e) {
+    // Only respond when reel editor tab is active AND the edit view is visible
+    const editorTab = document.getElementById('reelEditor');
+    if (!editorTab || !editorTab.classList.contains('active')) return;
+    const editView = document.getElementById('editReelSetView');
+    if (!editView || editView.style.display === 'none') return;
+    // Don't interfere with inputs
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+    const strip = gameData.reelStrips[editorState.activeReel] || [];
+    if (strip.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (editorState.selectedItems.size === 0) {
+            editorState.selectedItems.add(0);
+        } else {
+            const current = Math.max(...editorState.selectedItems);
+            const next = Math.min(current + 1, strip.length - 1);
+            if (!e.shiftKey) editorState.selectedItems.clear();
+            editorState.selectedItems.add(next);
+        }
+        renderReelStrip();
+        scrollSelectedIntoView();
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (editorState.selectedItems.size === 0) {
+            editorState.selectedItems.add(0);
+        } else {
+            const current = Math.min(...editorState.selectedItems);
+            const prev = Math.max(current - 1, 0);
+            if (!e.shiftKey) editorState.selectedItems.clear();
+            editorState.selectedItems.add(prev);
+        }
+        renderReelStrip();
+        scrollSelectedIntoView();
+    }
+});
+
+function scrollSelectedIntoView() {
+    const list = document.getElementById('reelStripList');
+    if (!list || editorState.selectedItems.size === 0) return;
+    const targetIndex = Math.max(...editorState.selectedItems);
+    const items = list.querySelectorAll('li[draggable]');
+    for (const item of items) {
+        if (parseInt(item.dataset.index) === targetIndex) {
+            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            break;
+        }
+    }
+}

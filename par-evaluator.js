@@ -1,5 +1,5 @@
 /**
- * PAR Sheet Evaluator Engine
+ * PAR Sheet Generator Engine
  * Calculates probability, RTP, and hit frequency for reel-based slot games.
  */
 
@@ -19,19 +19,26 @@ let gameData = {
 const uploadSection = document.getElementById('uploadSection');
 const fileInput = document.getElementById('fileInput');
 
-uploadSection.addEventListener('click', () => fileInput.click());
-uploadSection.addEventListener('dragover', (e) => { e.preventDefault(); });
-uploadSection.addEventListener('drop', (e) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) processFile(file);
-});
-fileInput.addEventListener('change', (e) => {
-    if (e.target.files[0]) processFile(e.target.files[0]);
-});
+if (uploadSection) {
+    uploadSection.addEventListener('click', () => fileInput.click());
+    uploadSection.addEventListener('dragover', (e) => { e.preventDefault(); });
+    uploadSection.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file) processFile(file);
+    });
+}
+if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) processFile(e.target.files[0]);
+    });
+}
 
 // ============ START FROM SCRATCH ============
-document.getElementById('startFromScratchBtn').addEventListener('click', startFromScratch);
+const startFromScratchEl = document.getElementById('startFromScratchBtn');
+if (startFromScratchEl) {
+    startFromScratchEl.addEventListener('click', startFromScratch);
+}
 
 function startFromScratch() {
     const config = getConfig();
@@ -199,11 +206,45 @@ function processFile(file) {
 
 // ============ PARSING ============
 function parseExportedWorkbook(workbook) {
-    const config = getConfig();
     const sheetNames = workbook.SheetNames;
 
     // --- Find all reel strip sheets ---
     const reelStripSheets = sheetNames.filter(n => n.startsWith('Reel Strips'));
+
+    // --- Auto-detect numReels from first reel strip sheet ---
+    let detectedReels = parseInt(document.getElementById('numReels').value) || 5;
+    if (reelStripSheets.length > 0) {
+        const firstRsData = XLSX.utils.sheet_to_json(workbook.Sheets[reelStripSheets[0]], { header: 1 });
+        if (firstRsData.length > 1) {
+            // Count data columns in first data row (skip stop# column)
+            const dataRow = firstRsData[1] || [];
+            let cols = 0;
+            for (let c = 1; c < dataRow.length; c++) {
+                if (dataRow[c] !== undefined && dataRow[c] !== '') cols++;
+            }
+            if (cols > 0) detectedReels = cols;
+        }
+    }
+    document.getElementById('numReels').value = detectedReels;
+
+    // Detect numLines and numRows from Win Lines sheet
+    if (sheetNames.includes('Win Lines')) {
+        const wlData = XLSX.utils.sheet_to_json(workbook.Sheets['Win Lines'], { header: 1 });
+        if (wlData.length > 1) {
+            document.getElementById('numLines').value = wlData.length - 1;
+            let maxRow = 1;
+            for (let i = 1; i < wlData.length; i++) {
+                const row = wlData[i];
+                if (!row) continue;
+                for (let j = 1; j < row.length; j++) {
+                    if (typeof row[j] === 'number' && row[j] > maxRow) maxRow = row[j];
+                }
+            }
+            document.getElementById('numRows').value = maxRow;
+        }
+    }
+
+    const config = getConfig();
 
     // --- Parse Paytable sheet ---
     const paySheet = workbook.Sheets['Paytable'];
@@ -316,6 +357,64 @@ function parseExportedWorkbook(workbook) {
             symbolCounts,
             wildMultipliers
         });
+    }
+
+    // --- Parse Feature Triggers sheet ---
+    if (sheetNames.includes('Feature Triggers')) {
+        const ftData = XLSX.utils.sheet_to_json(workbook.Sheets['Feature Triggers'], { header: 1 });
+        // Skip header rows (row 0 = title, row 1 = empty, row 2 = column headers)
+        for (let i = 3; i < ftData.length; i++) {
+            const row = ftData[i];
+            if (!row || !row[0]) continue;
+            // Skip sub-headers for reel bands
+            if (String(row[0]).startsWith('Reel Bands for:') || row[0] === 'Set Index') continue;
+
+            const setName = String(row[0]);
+            const enabled = row[1] === true || row[1] === 'TRUE' || row[1] === 1;
+
+            // Find matching reel set
+            const matchSet = gameData.reelSets.find(rs => rs.name === setName);
+            if (matchSet && enabled) {
+                matchSet.featureTrigger = {
+                    enabled: true,
+                    triggerSymbol: String(row[2] || 'S'),
+                    triggerCount: parseInt(row[3]) || 3,
+                    numSpins: parseInt(row[4]) || 10,
+                    targetSetIndex: parseInt(row[5]) || 0,
+                    globalMultiplier: parseFloat(row[6]) || 1,
+                    retrigger: true,
+                    reelBands: [{ setIndex: parseInt(row[5]) || 0, weight: 1 }],
+                    awards: [{
+                        scatterCount: parseInt(row[3]) || 3,
+                        spins: parseInt(row[4]) || 10,
+                        targetSetIndex: parseInt(row[5]) || 0
+                    }]
+                };
+
+                // Check for reel bands sub-table
+                for (let j = i + 1; j < ftData.length; j++) {
+                    const subRow = ftData[j];
+                    if (!subRow || !subRow[0]) break;
+                    if (String(subRow[0]).startsWith('Reel Bands for: ' + setName)) {
+                        // Next row is header, then data
+                        matchSet.featureTrigger.reelBands = [];
+                        for (let k = j + 2; k < ftData.length; k++) {
+                            const bandRow = ftData[k];
+                            if (!bandRow || bandRow[0] === undefined || bandRow[0] === '') break;
+                            if (typeof bandRow[0] === 'number') {
+                                matchSet.featureTrigger.reelBands.push({
+                                    setIndex: parseInt(bandRow[0]) || 0,
+                                    weight: parseFloat(bandRow[2]) || 1
+                                });
+                            }
+                        }
+                        break;
+                    }
+                }
+            } else if (matchSet) {
+                matchSet.featureTrigger = { enabled: false, targetSetIndex: -1, awards: [], globalMultiplier: 1, retrigger: true };
+            }
+        }
     }
 
     // Set active to first set
@@ -584,13 +683,15 @@ function runEvaluation() {
         const savedStrips = gameData.reelStrips;
         gameData.reelStrips = reelSet.reelStrips;
 
-        const results = calculateLineWins(config, reelLengths, totalCombinations, reelSet.wildMultipliers);
+        const results = calculateLineWins(config, reelLengths, totalCombinations, reelSet.wildMultipliers, reelSet.expandingWilds);
         const scatterResults = calculateScatterWins(config, reelLengths, totalCombinations);
 
         gameData.reelStrips = savedStrips;
 
         weightedTotalPayout += (results.totalPayout / totalCombinations) * weightFraction;
-        weightedTotalHits += (results.totalHits / (totalCombinations * config.numLines)) * weightFraction;
+        const hitRatePerLine = results.totalHits / (totalCombinations * config.numLines);
+        const approxAnyWinRate = 1 - Math.pow(1 - hitRatePerLine, config.numLines);
+        weightedTotalHits += approxAnyWinRate * weightFraction;
 
         perSetResults.push({
             name: reelSet.name,
@@ -615,7 +716,7 @@ function runEvaluation() {
 
     // Display results using active set detail but weighted totals
     const weightedRtp = (weightedTotalPayout * 100) + freeGamesRtp.totalContribution;
-    const weightedHitFreq = weightedTotalHits * 100;
+    const weightedHitFreq = weightedTotalHits;
 
     displayResultsWeighted(weightedRtp, weightedHitFreq, allSymbolResults, primaryScatterResults,
         primaryTotalCombinations, config, perSetResults, freeGamesRtp);
@@ -764,7 +865,7 @@ function calculateChainRtp(config, targetSetIdx, baseSpins, globalMultiplier, vi
     // Calculate per-spin line win RTP of target set
     const savedStrips = gameData.reelStrips;
     gameData.reelStrips = targetSet.reelStrips;
-    const targetResults = calculateLineWins(config, targetReelLengths, targetTotalCombos, targetSet.wildMultipliers);
+    const targetResults = calculateLineWins(config, targetReelLengths, targetTotalCombos, targetSet.wildMultipliers, targetSet.expandingWilds);
     gameData.reelStrips = savedStrips;
 
     const perSpinRtp = targetResults.totalPayout / targetTotalCombos; // fraction
@@ -969,13 +1070,14 @@ function calculateLevelProgression(config) {
     return progressionData;
 }
 
-function calculateLineWins(config, reelLengths, totalCombinations, wildMultipliers) {
+function calculateLineWins(config, reelLengths, totalCombinations, wildMultipliers, expandingWilds) {
     const wildSymbol = config.wildSymbol;
     const scatterSymbol = config.scatterSymbol;
 
+    // Check if expanding wilds is active for this reel set
+    const hasExpandingWilds = !!expandingWilds;
+
     // Calculate expected wild multiplier
-    // wildMultipliers is an array of { multiplier, chance }
-    // Expected value = sum(multiplier * chance). If empty or undefined, default to 1.
     let expectedWildMultiplier = 1;
     if (wildMultipliers && wildMultipliers.length > 0) {
         expectedWildMultiplier = wildMultipliers.reduce((sum, wm) => sum + (wm.multiplier * wm.chance), 0);
@@ -1011,7 +1113,7 @@ function calculateLineWins(config, reelLengths, totalCombinations, wildMultiplie
             let totalLineComboNoWild = 0;
 
             for (const line of gameData.winLines) {
-                const result = countLineCombosForSymbolWithWildSplit(sym, len, line, config, reelLengths, wildSymbol, scatterSymbol);
+                const result = countLineCombosForSymbolWithWildSplit(sym, len, line, config, reelLengths, wildSymbol, scatterSymbol, hasExpandingWilds);
                 totalLineCombos += result.total;
                 totalLineComboWithWild += result.withWild;
                 totalLineComboNoWild += result.noWild;
@@ -1034,9 +1136,12 @@ function calculateLineWins(config, reelLengths, totalCombinations, wildMultiplie
     return { symbolResults, totalPayout, totalHits, totalCombinations };
 }
 
-function countLineCombosForSymbolWithWildSplit(symbol, length, line, config, reelLengths, wildSymbol, scatterSymbol) {
+function countLineCombosForSymbolWithWildSplit(symbol, length, line, config, reelLengths, wildSymbol, scatterSymbol, expandingWilds) {
     // Returns { total, withWild, noWild } - splitting combos by whether they involve wilds
     const isWildSymbol = (symbol === wildSymbol);
+
+    // Check for expanding wilds (passed from caller)
+    const hasExpandingWilds = !!expandingWilds;
 
     const matchCounts = [];
     const nonMatchCounts = [];
@@ -1046,24 +1151,54 @@ function countLineCombosForSymbolWithWildSplit(symbol, length, line, config, ree
     for (let reel = 0; reel < config.numReels; reel++) {
         const row = line[reel];
         const reelLength = reelLengths[reel];
+        const reelStrip = gameData.reelStrips[reel];
 
         let matches = 0;
         let wilds = 0;
         let pureSymbol = 0;
-        for (let stop = 0; stop < reelLength; stop++) {
-            const visibleSymbol = getSymbolAtPosition(reel, stop, row, config);
-            if (visibleSymbol === wildSymbol) {
-                wilds++;
-                if (!isWildSymbol) matches++;
-            } else if (visibleSymbol === symbol) {
-                matches++;
-                pureSymbol++;
+
+        if (hasExpandingWilds) {
+            // With expanding wilds: a stop counts as wild if ANY row in window has wild
+            for (let stop = 0; stop < reelLength; stop++) {
+                let hasWildInWindow = false;
+                for (let r = 0; r < config.numRows; r++) {
+                    const idx = (stop + r) % reelLength;
+                    if (reelStrip[idx] === wildSymbol) {
+                        hasWildInWindow = true;
+                        break;
+                    }
+                }
+                const visibleSymbol = getSymbolAtPosition(reel, stop, row, config);
+
+                if (hasWildInWindow) {
+                    wilds++;
+                    if (!isWildSymbol) matches++;
+                } else if (visibleSymbol === symbol) {
+                    matches++;
+                    pureSymbol++;
+                } else if (visibleSymbol === wildSymbol) {
+                    // Shouldn't happen if expanding wilds catches all, but safety
+                    wilds++;
+                    if (!isWildSymbol) matches++;
+                }
+            }
+        } else {
+            // Standard: only the specific row position matters
+            for (let stop = 0; stop < reelLength; stop++) {
+                const visibleSymbol = getSymbolAtPosition(reel, stop, row, config);
+                if (visibleSymbol === wildSymbol) {
+                    wilds++;
+                    if (!isWildSymbol) matches++;
+                } else if (visibleSymbol === symbol) {
+                    matches++;
+                    pureSymbol++;
+                }
             }
         }
 
         if (isWildSymbol) {
             matchCounts.push(wilds);
-            pureSymbolCounts.push(wilds); // For wild symbol, all matches are "pure"
+            pureSymbolCounts.push(wilds);
         } else {
             matchCounts.push(matches);
             pureSymbolCounts.push(pureSymbol);
@@ -1109,7 +1244,9 @@ function countLineCombosForSymbolWithWildSplit(symbol, length, line, config, ree
 
 // Backwards-compatible wrapper for line detail display
 function countLineCombosForSymbol(symbol, length, line, config, reelLengths, wildSymbol, scatterSymbol) {
-    const result = countLineCombosForSymbolWithWildSplit(symbol, length, line, config, reelLengths, wildSymbol, scatterSymbol);
+    const activeSet = gameData.reelSets[gameData.activeReelSet];
+    const expanding = activeSet && activeSet.expandingWilds;
+    const result = countLineCombosForSymbolWithWildSplit(symbol, length, line, config, reelLengths, wildSymbol, scatterSymbol, expanding);
     return result.total;
 }
 
@@ -1224,7 +1361,8 @@ function displayResultsWeighted(rtp, hitFreq, symbolResults, scatterResults, tot
     }
 
     const hitEl = document.getElementById('hitFreqValue');
-    hitEl.textContent = hitFreq.toFixed(4) + '%';
+    const hitOneInX = hitFreq > 0 ? (1 / hitFreq).toFixed(2) : '∞';
+    hitEl.textContent = '1 in ' + hitOneInX;
     hitEl.className = 'value';
 
     document.getElementById('totalCombos').textContent = totalCombinations.toLocaleString();
@@ -1232,6 +1370,25 @@ function displayResultsWeighted(rtp, hitFreq, symbolResults, scatterResults, tot
     // Show weighted note if multiple sets
     const activeSetPayout = symbolResults.reduce((sum, s) => sum + s.totalPayout, 0);
     document.getElementById('totalPayout').textContent = activeSetPayout.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+    // Feature hit rate - probability of triggering the scatter feature per spin
+    const featureHitEl = document.getElementById('featureHitRate');
+    if (featureHitEl) {
+        if (scatterResults && scatterResults.scatterResults) {
+            // Find the trigger count from active set's feature trigger
+            const activeFt = gameData.reelSets[gameData.activeReelSet] ? gameData.reelSets[gameData.activeReelSet].featureTrigger : null;
+            const triggerCount = (activeFt && activeFt.enabled && activeFt.triggerCount) ? activeFt.triggerCount : 3;
+            const triggerResult = scatterResults.scatterResults.find(sr => sr.count >= triggerCount);
+            if (triggerResult && triggerResult.probability > 0) {
+                const featureOneInX = (1 / triggerResult.probability).toFixed(2);
+                featureHitEl.textContent = '1 in ' + featureOneInX;
+            } else {
+                featureHitEl.textContent = 'N/A';
+            }
+        } else {
+            featureHitEl.textContent = 'N/A';
+        }
+    }
 
     // Symbol breakdown table (for active reel set)
     let symbolHTML = '';
@@ -1878,9 +2035,9 @@ function renderReelConfig() {
     html += '</table>';
 
     html += `<div style="margin-top: 15px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
-        <button id="applyReelConfigBtn" style="background: #00d4ff; padding: 10px 20px;">✅ Apply Counts</button>
         <button id="randomiseReelBtn" style="background: #00ff88; color: #1a1a2e; padding: 10px 20px;">🎲 Randomise & Apply</button>
-        <span style="color: #aaa; font-size: 0.8em;">Apply Counts rebuilds strips in order. Randomise shuffles them.</span>
+        <button id="stackedSymbolsBtn" style="background: #ff8c00; color: #fff; padding: 10px 20px;">📚 Stacked Symbols</button>
+        <span style="color: #aaa; font-size: 0.8em;">Randomise shuffles strips. Stacked adds random 2/3 stacks.</span>
     </div>`;
 
     container.innerHTML = html;
@@ -1900,14 +2057,6 @@ function renderReelConfig() {
         });
     });
 
-    // Apply counts (ordered)
-    const applyBtn = document.getElementById('applyReelConfigBtn');
-    if (applyBtn) {
-        applyBtn.addEventListener('click', () => {
-            applyReelConfigToStrips(false);
-        });
-    }
-
     // Randomise & Apply
     const randBtn = document.getElementById('randomiseReelBtn');
     if (randBtn) {
@@ -1915,11 +2064,20 @@ function renderReelConfig() {
             applyReelConfigToStrips(true);
         });
     }
+
+    // Stacked Symbols
+    const stackBtn = document.getElementById('stackedSymbolsBtn');
+    if (stackBtn) {
+        stackBtn.addEventListener('click', () => {
+            applyStackedSymbols();
+        });
+    }
 }
 
 function applyReelConfigToStrips(randomise) {
     const config = getConfig();
     const symbols = gameData.paytable.map(e => e.symbol);
+    const bonusSymbol = config.scatterSymbol; // The bonus/scatter symbol
 
     gameData.reelStrips = [];
     for (let r = 0; r < config.numReels; r++) {
@@ -1932,20 +2090,150 @@ function applyReelConfigToStrips(randomise) {
         }
 
         if (randomise) {
-            // Fisher-Yates shuffle
-            for (let i = strip.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [strip[i], strip[j]] = [strip[j], strip[i]];
+            // Separate bonus symbols from non-bonus
+            const bonusPositions = [];
+            const nonBonusSymbols = [];
+            for (const sym of strip) {
+                if (sym === bonusSymbol) {
+                    bonusPositions.push(sym);
+                } else {
+                    nonBonusSymbols.push(sym);
+                }
             }
-        }
 
-        gameData.reelStrips[r] = strip;
+            // Shuffle non-bonus symbols
+            for (let i = nonBonusSymbols.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [nonBonusSymbols[i], nonBonusSymbols[j]] = [nonBonusSymbols[j], nonBonusSymbols[i]];
+            }
+
+            // Place bonus symbols with minimum 3 apart spacing
+            const totalLength = strip.length;
+            const bonusCount = bonusPositions.length;
+
+            if (bonusCount > 0 && totalLength > 0) {
+                // Calculate evenly spaced positions with minimum gap of 3
+                const spacing = Math.max(3, Math.floor(totalLength / bonusCount));
+                const bonusIndices = [];
+                let startOffset = Math.floor(Math.random() * Math.min(spacing, totalLength - (bonusCount - 1) * spacing));
+
+                for (let b = 0; b < bonusCount; b++) {
+                    let pos = startOffset + b * spacing;
+                    if (pos >= totalLength) pos = totalLength - 1 - (bonusCount - 1 - b);
+                    bonusIndices.push(pos);
+                }
+
+                // Build final strip: insert bonus symbols at calculated positions
+                const finalStrip = [];
+                let nonBonusIdx = 0;
+                const bonusSet = new Set(bonusIndices);
+
+                for (let i = 0; i < totalLength; i++) {
+                    if (bonusSet.has(i)) {
+                        finalStrip.push(bonusSymbol);
+                    } else {
+                        finalStrip.push(nonBonusSymbols[nonBonusIdx++] || nonBonusSymbols[0]);
+                    }
+                }
+
+                gameData.reelStrips[r] = finalStrip;
+            } else {
+                gameData.reelStrips[r] = nonBonusSymbols;
+            }
+        } else {
+            gameData.reelStrips[r] = strip;
+        }
     }
 
     // Sync to active reel set
     if (gameData.reelSets.length > 0) {
         gameData.reelSets[gameData.activeReelSet].reelStrips = gameData.reelStrips.map(r => [...r]);
         gameData.reelSets[gameData.activeReelSet].symbolCounts = JSON.parse(JSON.stringify(gameData.symbolCounts));
+    }
+
+    runEvaluation();
+    renderReelConfig();
+}
+
+function applyStackedSymbols() {
+    const config = getConfig();
+    const scatterSymbol = config.scatterSymbol;
+
+    // First randomise the strips (with scatter spacing)
+    applyReelConfigToStrips(true);
+
+    // Now rearrange each reel so non-scatter symbols are grouped into stacks of 2-3
+    // WITHOUT changing the count of any symbol
+    for (let r = 0; r < config.numReels; r++) {
+        const strip = gameData.reelStrips[r];
+        if (strip.length < 5) continue;
+
+        // Record scatter positions
+        const scatterPositions = new Set();
+        for (let i = 0; i < strip.length; i++) {
+            if (strip[i] === scatterSymbol) {
+                scatterPositions.add(i);
+            }
+        }
+
+        // Collect all non-scatter symbols (preserving exact counts)
+        const nonScatters = strip.filter(s => s !== scatterSymbol);
+        if (nonScatters.length === 0) continue;
+
+        // Group by symbol, preserving counts
+        const symbolBuckets = {};
+        for (const sym of nonScatters) {
+            symbolBuckets[sym] = (symbolBuckets[sym] || 0) + 1;
+        }
+
+        // Build stacks: pull from buckets in random order, creating runs of 2-3
+        const stacked = [];
+        const symbols = Object.keys(symbolBuckets);
+
+        // Shuffle symbol order
+        for (let i = symbols.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [symbols[i], symbols[j]] = [symbols[j], symbols[i]];
+        }
+
+        // Drain each symbol's count into stacks of 2-3
+        let symIdx = 0;
+        while (stacked.length < nonScatters.length) {
+            // Find next symbol with remaining count
+            let found = false;
+            for (let attempts = 0; attempts < symbols.length; attempts++) {
+                const sym = symbols[symIdx % symbols.length];
+                symIdx++;
+                if (symbolBuckets[sym] > 0) {
+                    const stackSize = Math.min(Math.random() < 0.5 ? 2 : 3, symbolBuckets[sym]);
+                    for (let k = 0; k < stackSize; k++) {
+                        stacked.push(sym);
+                        symbolBuckets[sym]--;
+                    }
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) break;
+        }
+
+        // Place back into strip, keeping scatter positions fixed
+        const newStrip = [];
+        let stackedIdx = 0;
+        for (let i = 0; i < strip.length; i++) {
+            if (scatterPositions.has(i)) {
+                newStrip.push(scatterSymbol);
+            } else {
+                newStrip.push(stacked[stackedIdx++]);
+            }
+        }
+
+        gameData.reelStrips[r] = newStrip;
+    }
+
+    // Sync to active reel set (counts unchanged, just order)
+    if (gameData.reelSets.length > 0) {
+        gameData.reelSets[gameData.activeReelSet].reelStrips = gameData.reelStrips.map(r => [...r]);
     }
 
     runEvaluation();
@@ -2106,7 +2394,7 @@ function calculateWinDistribution() {
     document.getElementById('winDistTable').innerHTML = '<p style="color: #00d4ff; font-size: 1.2em;">⏳ Calculating win distribution...</p>';
 
     // Use chunked async processing to avoid freezing the browser
-    const sampleSize = 500000;
+    const sampleSize = 10000000;
     const chunkSize = 50000;
 
     const bandCounts = new Array(bands.length).fill(0);
@@ -2350,11 +2638,12 @@ function exportToExcel() {
 
         const savedStrips = gameData.reelStrips;
         gameData.reelStrips = reelSet.reelStrips;
-        const res = calculateLineWins(config, rl, tc, reelSet.wildMultipliers);
+        const res = calculateLineWins(config, rl, tc, reelSet.wildMultipliers, reelSet.expandingWilds);
         gameData.reelStrips = savedStrips;
 
         const setRtp = (res.totalPayout / tc) * 100;
-        const setHitFreq = (res.totalHits / (tc * config.numLines)) * 100;
+        const hitPerLine = res.totalHits / (tc * config.numLines);
+        const setHitFreq = (1 - Math.pow(1 - hitPerLine, config.numLines)) * 100;
         weightedRtp += setRtp * wf;
         weightedHitFreq += setHitFreq * wf;
         perSetSummary.push({ name: reelSet.name, weight: reelSet.weight, rtp: setRtp, hitFreq: setHitFreq, weightFraction: wf });
@@ -2426,83 +2715,101 @@ function exportToExcel() {
             const wmSheet = XLSX.utils.aoa_to_sheet(wmRows);
             XLSX.utils.book_append_sheet(wb, wmSheet, `Wild Mult${sheetSuffix}`.substring(0, 31));
         }
-    }
 
-    // --- Symbol Breakdown (active set) ---
-    const activeSet = gameData.reelSets[gameData.activeReelSet] || {};
-    const reelLengths = gameData.reelStrips.map(r => r.length);
-    const totalCombinations = reelLengths.reduce((a, b) => a * b, 1);
-    const results = calculateLineWins(config, reelLengths, totalCombinations, activeSet.wildMultipliers);
+        // --- Symbol Breakdown for this set ---
+        const savedStripsForData = gameData.reelStrips;
+        gameData.reelStrips = reelSet.reelStrips;
 
-    const symbolHeader = ['Symbol'];
-    for (let len = 3; len <= config.numReels; len++) {
-        symbolHeader.push(`${len}x Pay`, `${len}x Combos`, `${len}x Payout`);
-    }
-    symbolHeader.push('Total Payout', 'RTP Contribution');
+        const setTc = rl.reduce((a, b) => a * b, 1);
+        const setResults = calculateLineWins(config, rl, setTc, reelSet.wildMultipliers, reelSet.expandingWilds);
 
-    const symbolRows = [symbolHeader];
-    for (const sym of results.symbolResults) {
-        const row = [sym.symbol];
+        const symHeader = ['Symbol'];
         for (let len = 3; len <= config.numReels; len++) {
-            row.push(sym.pays[len] || 0);
-            row.push(sym.combosPerLength[len] || 0);
-            row.push(sym.payoutPerLength[len] || 0);
+            symHeader.push(`${len}x Pay`, `${len}x Combos`, `${len}x Payout`);
         }
-        row.push(sym.totalPayout);
-        row.push((sym.totalPayout / totalCombinations));
-        symbolRows.push(row);
-    }
-    const symbolSheet = XLSX.utils.aoa_to_sheet(symbolRows);
-    XLSX.utils.book_append_sheet(wb, symbolSheet, 'Symbol Breakdown');
+        symHeader.push('Total Payout', 'RTP Contribution');
 
-    // --- Line Detail ---
-    const lineHeader = ['Line #', 'Pattern', 'Hits', 'Payout', 'RTP'];
-    const lineRows = [lineHeader];
-
-    for (let lineIdx = 0; lineIdx < gameData.winLines.length; lineIdx++) {
-        const line = gameData.winLines[lineIdx];
-        let linePayout = 0;
-        let lineHits = 0;
-
-        for (const entry of gameData.paytable) {
-            if (entry.symbol === config.scatterSymbol) continue;
+        const symRows = [symHeader];
+        for (const sym of setResults.symbolResults) {
+            const sRow = [sym.symbol];
             for (let len = 3; len <= config.numReels; len++) {
-                if (!entry.pays[len] || entry.pays[len] <= 0) continue;
-                const combos = countLineCombosForSymbol(entry.symbol, len, line, config,
-                    reelLengths, config.wildSymbol, config.scatterSymbol);
-                linePayout += combos * entry.pays[len];
-                lineHits += combos;
+                sRow.push(sym.pays[len] || 0);
+                sRow.push(sym.combosPerLength[len] || 0);
+                sRow.push(sym.payoutPerLength[len] || 0);
             }
+            sRow.push(sym.totalPayout);
+            sRow.push(sym.totalPayout / setTc);
+            symRows.push(sRow);
         }
+        // Totals row
+        symRows.push([]);
+        symRows.push(['TOTAL', '', '', '', '', '', '', '', '', setResults.totalPayout, setResults.totalPayout / setTc]);
+        symRows.push([]);
+        symRows.push(['Total Combinations', setTc]);
+        symRows.push(['RTP (this set)', (setResults.totalPayout / setTc) * 100 + '%']);
+        symRows.push(['Hit Frequency', '1 in ' + (setResults.totalHits > 0 ? (setTc * config.numLines / setResults.totalHits).toFixed(2) : 'N/A')]);
 
-        const pattern = line.map((r, i) => `R${i + 1}:${r}`).join(' ');
-        lineRows.push([lineIdx + 1, pattern, lineHits, linePayout, linePayout / totalCombinations]);
-    }
-    const lineSheet = XLSX.utils.aoa_to_sheet(lineRows);
-    XLSX.utils.book_append_sheet(wb, lineSheet, 'Line Detail');
+        const symSheet = XLSX.utils.aoa_to_sheet(symRows);
+        XLSX.utils.book_append_sheet(wb, symSheet, `Data${sheetSuffix}`.substring(0, 31));
 
-    // --- Scatter Analysis ---
-    const scatterResults = calculateScatterWins(config, reelLengths, totalCombinations);
-    if (scatterResults) {
-        const scatHeader = ['Scatter Count', 'Combinations', 'Probability', 'Frequency (1 in X)', 'Award'];
-        const scatRows = [scatHeader];
-        for (const sr of scatterResults.scatterResults) {
-            const freq = sr.probability > 0 ? (1 / sr.probability) : 0;
-            scatRows.push([`${sr.count} Scatters`, sr.combinations, sr.probability, freq, sr.payInfo]);
-        }
-        scatRows.push([]);
-        scatRows.push(['Scatter Stops Per Reel']);
-        scatRows.push(['Reel', 'Scatter Stops', 'Total Stops', 'Probability']);
+        // --- Reel Composition for this set ---
+        const compHeader = ['Symbol'];
         for (let r = 0; r < config.numReels; r++) {
-            const sc = scatterResults.scatterCountsPerReel[r];
-            const total = gameData.reelStrips[r].length;
-            scatRows.push([`Reel ${r + 1}`, sc, total, sc / total]);
+            compHeader.push(`Reel ${r + 1}`);
         }
-        const scatSheet = XLSX.utils.aoa_to_sheet(scatRows);
-        XLSX.utils.book_append_sheet(wb, scatSheet, 'Scatter Analysis');
+        compHeader.push('Total');
+
+        const compRows = [compHeader];
+        const symbols = gameData.paytable.map(e => e.symbol);
+        for (const sym of symbols) {
+            const cRow = [sym];
+            let symTotal = 0;
+            for (let r = 0; r < config.numReels; r++) {
+                const count = reelSet.reelStrips[r].filter(s => s === sym).length;
+                cRow.push(count);
+                symTotal += count;
+            }
+            cRow.push(symTotal);
+            compRows.push(cRow);
+        }
+        // Totals row
+        const totRow = ['TOTAL'];
+        let grandTotal = 0;
+        for (let r = 0; r < config.numReels; r++) {
+            totRow.push(reelSet.reelStrips[r].length);
+            grandTotal += reelSet.reelStrips[r].length;
+        }
+        totRow.push(grandTotal);
+        compRows.push(totRow);
+
+        const compSheet = XLSX.utils.aoa_to_sheet(compRows);
+        XLSX.utils.book_append_sheet(wb, compSheet, `Composition${sheetSuffix}`.substring(0, 31));
+
+        // --- Scatter Analysis for this set ---
+        const setScatterResults = calculateScatterWins(config, rl, setTc);
+        if (setScatterResults) {
+            const scatHeader2 = ['Scatter Count', 'Combinations', 'Probability', 'Frequency (1 in X)', 'Award'];
+            const scatRows2 = [scatHeader2];
+            for (const sr of setScatterResults.scatterResults) {
+                const freq = sr.probability > 0 ? (1 / sr.probability) : 0;
+                scatRows2.push([`${sr.count} Scatters`, sr.combinations, sr.probability, freq, sr.payInfo]);
+            }
+            scatRows2.push([]);
+            scatRows2.push(['Scatter Stops Per Reel']);
+            scatRows2.push(['Reel', 'Scatter Stops', 'Total Stops', 'Probability']);
+            for (let r = 0; r < config.numReels; r++) {
+                const sc = setScatterResults.scatterCountsPerReel[r];
+                const total = reelSet.reelStrips[r].length;
+                scatRows2.push([`Reel ${r + 1}`, sc, total, sc / total]);
+            }
+            const scatSheet2 = XLSX.utils.aoa_to_sheet(scatRows2);
+            XLSX.utils.book_append_sheet(wb, scatSheet2, `Scatter${sheetSuffix}`.substring(0, 31));
+        }
+
+        gameData.reelStrips = savedStripsForData;
     }
 
-    // --- Paytable ---
+    // --- Paytable (shared) ---
     const payHeader = ['Symbol', 'SymbolID'];
     for (let len = 3; len <= config.numReels; len++) {
         payHeader.push(`${len}x`);
@@ -2529,6 +2836,39 @@ function exportToExcel() {
     }
     const wlSheet = XLSX.utils.aoa_to_sheet(wlRows);
     XLSX.utils.book_append_sheet(wb, wlSheet, 'Win Lines');
+
+    // --- Feature Triggers ---
+    const ftRows = [['Feature Triggers'], [], ['Reel Set', 'Enabled', 'Trigger Symbol', 'Trigger Count', 'Num Spins', 'Target Set Index', 'Global Multiplier']];
+    for (let setIdx = 0; setIdx < gameData.reelSets.length; setIdx++) {
+        const reelSet = gameData.reelSets[setIdx];
+        const ft = reelSet.featureTrigger;
+        if (ft && ft.enabled) {
+            const targetIdx = (ft.reelBands && ft.reelBands.length > 0) ? ft.reelBands[0].setIndex : (ft.targetSetIndex || 0);
+            ftRows.push([
+                reelSet.name,
+                true,
+                ft.triggerSymbol || '',
+                ft.triggerCount || 3,
+                ft.numSpins || 10,
+                targetIdx,
+                ft.globalMultiplier || 1
+            ]);
+            // Add reel bands if multiple
+            if (ft.reelBands && ft.reelBands.length > 1) {
+                ftRows.push([]);
+                ftRows.push(['Reel Bands for: ' + reelSet.name]);
+                ftRows.push(['Set Index', 'Set Name', 'Weight']);
+                for (const band of ft.reelBands) {
+                    const bandName = gameData.reelSets[band.setIndex] ? gameData.reelSets[band.setIndex].name : 'Unknown';
+                    ftRows.push([band.setIndex, bandName, band.weight]);
+                }
+            }
+        } else {
+            ftRows.push([reelSet.name, false, '', '', '', '', '']);
+        }
+    }
+    const ftSheet = XLSX.utils.aoa_to_sheet(ftRows);
+    XLSX.utils.book_append_sheet(wb, ftSheet, 'Feature Triggers');
 
     // Generate and download with incremented version number
     const fileName = getNextVersionFileName(currentFileName);
