@@ -489,16 +489,21 @@
             background: #000000;
             border: 1px solid #222222;
             color: #e0e0e0;
-            padding: 6px 10px;
+            padding: 4px 6px;
             border-radius: 4px;
-            width: 80px;
-            font-size: 0.9em;
+            width: 60px;
+            font-size: 0.85em;
             text-align: center;
         }
 
         .paytable-edit-table input:focus {
             border-color: #ff8c00;
             outline: none;
+        }
+
+        .paytable-edit-table th, .paytable-edit-table td {
+            padding: 5px 6px;
+            font-size: 0.85em;
         }
 
         .paytable-edit-table tr.selected-row {
@@ -561,12 +566,19 @@
                             <button onclick="stepInput('wizRows', 1)" style="padding: 8px 14px; font-size: 1.2em; background: #ff8c00; color: #fff; border-radius: 6px;">+</button>
                         </div>
                     </label>
+                    <label style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <span style="font-size: 1em; color: #aaa;">Win Type</span>
+                        <select id="wizWinType" style="background: #000; border: 1px solid #ff8c00; color: #ffffff; padding: 12px 16px; border-radius: 8px; font-size: 1.2em; text-align: center;">
+                            <option value="lines">Lines</option>
+                            <option value="ways">Ways</option>
+                        </select>
+                    </label>
                 </div>
                 <div style="text-align: center; margin-top: 10px;">
                     <div id="wizPreview" style="display: inline-grid; gap: 3px; padding: 15px; border: 1px solid #333; border-radius: 8px;"></div>
                 </div>
                 <div style="text-align: center; margin-top: 20px;">
-                    <button id="wizStep1Next" style="background: #ff8c00; color: #fff; padding: 12px 30px; font-size: 1em;">Next: Win Lines →</button>
+                    <button id="wizStep1Next" style="background: #ff8c00; color: #fff; padding: 12px 30px; font-size: 1em;">Next →</button>
                 </div>
             </div>
 
@@ -648,8 +660,9 @@
 
             <div class="results-section">
                 <div class="result-card">
-                    <h3>📊 Total RTP (Base Game)</h3>
+                    <h3>📊 Total RTP</h3>
                     <div class="value" id="rtpValue">--</div>
+                    <div id="rtpBreakdown" style="margin-top: 8px; font-size: 0.75em; color: #888;"></div>
                 </div>
                 <div class="result-card">
                     <h3>🎯 Hit Frequency</h3>
@@ -664,10 +677,14 @@
                     <div class="value" id="totalPayout">--</div>
                 </div>
             </div>
-            <div class="results-section" style="grid-template-columns: 1fr;">
+            <div class="results-section" style="grid-template-columns: 1fr 1fr;">
                 <div class="result-card">
                     <h3>🎰 Feature Hit Rate</h3>
                     <div class="value" id="featureHitRate">--</div>
+                </div>
+                <div class="result-card">
+                    <h3>🪙 Coin Hit Rate</h3>
+                    <div class="value" id="coinHitRate">--</div>
                 </div>
             </div>
 
@@ -749,6 +766,7 @@
                 <div class="result-card">
                     <h3>📊 RTP (This Set)</h3>
                     <div class="value" id="dataSetRtp">--</div>
+                    <div id="dataSetRtpBreakdown" style="margin-top: 8px; font-size: 0.75em; color: #888;"></div>
                 </div>
                 <div class="result-card">
                     <h3>🎯 Hit Frequency</h3>
@@ -857,14 +875,23 @@
                                 if (ft.reelBands && ft.reelBands.length > 0) {
                                     targetIdx = ft.reelBands[0].setIndex || 0;
                                 }
-                                ft.awards = [{
-                                    scatterCount: ft.triggerCount || 3,
-                                    spins: ft.numSpins || 10,
-                                    targetSetIndex: targetIdx
-                                }];
-                                ft.triggerCount = ft.triggerCount || 3;
-                                ft.numSpins = ft.numSpins || 10;
-                                ft.targetSetIndex = targetIdx;
+                                var tiers = ft.tiers;
+                                if (!tiers) {
+                                    tiers = [{ count: ft.triggerCount || 3, spins: ft.numSpins || 10, bands: ft.reelBands || [{ setIndex: 0, weight: 1 }] }];
+                                    ft.tiers = tiers;
+                                }
+                                ft.awards = [];
+                                for (var ti = 0; ti < tiers.length; ti++) {
+                                    var tierTarget = (tiers[ti].bands && tiers[ti].bands.length > 0) ? tiers[ti].bands[0].setIndex : targetIdx;
+                                    ft.awards.push({
+                                        scatterCount: tiers[ti].count,
+                                        spins: tiers[ti].spins,
+                                        targetSetIndex: tierTarget
+                                    });
+                                }
+                                ft.triggerCount = Math.min.apply(null, tiers.map(function(t) { return t.count; }));
+                                ft.numSpins = tiers[0].spins;
+                                ft.targetSetIndex = (tiers[0].bands && tiers[0].bands.length > 0) ? tiers[0].bands[0].setIndex : targetIdx;
                                 ft.globalMultiplier = ft.globalMultiplier || 1;
                                 ft.retrigger = !!ft.retriggerEnabled;
 
@@ -1032,9 +1059,13 @@
                 const hitRatePerLine = results.totalHits / (totalCombinations * config.numLines);
                 const setHitFreq = 1 - Math.pow(1 - hitRatePerLine, config.numLines);
 
+                // Coin/Collector RTP for this set
+                const coinRtpForSet = calculateCoinCollectorRtp(config, reelSet.weight);
+                const totalSetRtp = setRtp + coinRtpForSet;
+
                 const rtpEl = document.getElementById('dataSetRtp');
-                rtpEl.textContent = setRtp.toFixed(4) + '%';
-                rtpEl.className = 'value ' + (setRtp >= 94 ? 'good' : setRtp >= 90 ? 'warning' : 'bad');
+                rtpEl.textContent = totalSetRtp.toFixed(4) + '%';
+                rtpEl.className = 'value ' + (totalSetRtp >= 94 ? 'good' : totalSetRtp >= 90 ? 'warning' : 'bad');
 
                 document.getElementById('dataSetHitFreq').textContent = setHitFreq > 0 ? '1 in ' + (1 / setHitFreq).toFixed(2) : '∞';
                 document.getElementById('dataSetCombos').textContent = totalCombinations.toLocaleString();
@@ -1054,6 +1085,17 @@
                     }
                 } else {
                     featureRateEl.textContent = 'N/A';
+                }
+
+                // Breakdown
+                const dataBreakdown = document.getElementById('dataSetRtpBreakdown');
+                if (dataBreakdown) {
+                    let parts = [];
+                    parts.push('Line Wins: <span style="color: #fff;">' + setRtp.toFixed(4) + '%</span>');
+                    if (coinRtpForSet > 0) {
+                        parts.push('Coin/Collector: <span style="color: #fff;">' + coinRtpForSet.toFixed(4) + '%</span>');
+                    }
+                    dataBreakdown.innerHTML = parts.join(' &nbsp;|&nbsp; ');
                 }
             }
 
@@ -1085,9 +1127,18 @@
         }
 
         // Custom reel sets panel rendering (replaces the default one)
+        var _reelPanelRendering = false;
         function renderCustomReelSetsPanel() {
             const container = document.getElementById('reelSetsPanel');
             if (!container || !gameData || !gameData.reelSets) return;
+
+            // Trigger RTP recalc if not already inside one
+            if (!_reelPanelRendering && typeof window.runEvaluation === 'function') {
+                _reelPanelRendering = true;
+                window.runEvaluation();
+                _reelPanelRendering = false;
+                return; // runEvaluation will call us back
+            }
 
             const totalWeight = gameData.reelSets.reduce((sum, rs) => sum + rs.weight, 0);
 
@@ -1142,36 +1193,58 @@
                                             ${symbols.map(s => `<option value="${s}" ${s === triggerSym ? 'selected' : ''}>${s}</option>`).join('')}
                                         </select>
                                     </label>
-                                    <label style="display: flex; flex-direction: column; gap: 4px;">
-                                        <span style="font-size: 0.8em; color: #aaa;">Min. Scatters</span>
-                                        <input type="number" class="ft-trigger-count" data-set="${i}" value="${triggerCount}" min="1" max="7" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 6px 10px; border-radius: 4px; width: 70px; font-size: 0.9em; text-align: center;">
-                                    </label>
-                                    <label style="display: flex; flex-direction: column; gap: 4px;">
-                                        <span style="font-size: 0.8em; color: #aaa;">Spins Awarded</span>
-                                        <input type="number" class="ft-num-spins" data-set="${i}" value="${numSpins}" min="1" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 6px 10px; border-radius: 4px; width: 70px; font-size: 0.9em; text-align: center;">
-                                    </label>
                                 </div>
-                                <div style="margin-top: 10px;">
-                                    <span style="font-size: 0.85em; color: #aaa; display: block; margin-bottom: 8px;">Reel Bands (weighted):</span>
-                                    <div class="ft-bands-container" data-set="${i}">`;
+                                <div style="margin-top: 10px; margin-bottom: 15px;">
+                                    <span style="font-size: 0.85em; color: #aaa; display: block; margin-bottom: 8px;">Trigger Tiers:</span>`;
 
-                    const bandTotalWeight = bands.reduce((s, b) => s + (b.weight || 0), 0);
-                    for (let b = 0; b < bands.length; b++) {
-                        const band = bands[b];
-                        const bandPct = bandTotalWeight > 0 ? ((band.weight / bandTotalWeight) * 100).toFixed(1) : '0';
-                        html += `<div style="display: flex; gap: 10px; align-items: center; margin-bottom: 6px;">
-                            <select class="ft-band-select" data-set="${i}" data-band="${b}" style="background: #000; border: 1px solid #333; color: #fff; padding: 5px 8px; border-radius: 4px; font-size: 0.85em;">
-                                ${gameData.reelSets.map((rs, idx) => `<option value="${idx}" ${idx === band.setIndex ? 'selected' : ''}>${rs.name}</option>`).join('')}
-                            </select>
-                            <input type="number" class="ft-band-weight" data-set="${i}" data-band="${b}" value="${band.weight}" min="0" step="1" style="background: #000; border: 1px solid #333; color: #fff; padding: 5px 8px; border-radius: 4px; width: 60px; font-size: 0.85em; text-align: center;">
-                            <span style="font-size: 0.8em; color: #ff8c00; min-width: 45px;">${bandPct}%</span>
-                            ${bands.length > 1 ? `<button class="ft-band-remove" data-set="${i}" data-band="${b}" style="background: #ff4444; color: #fff; padding: 3px 8px; font-size: 0.75em; border-radius: 4px;">&#10005;</button>` : ''}
-                        </div>`;
+                    // Build tiers with per-tier reel bands
+                    if (!ft.tiers) {
+                        ft.tiers = [{ count: triggerCount, spins: numSpins, bands: bands || [{ setIndex: 0, weight: 1 }] }];
                     }
+                    const tiers = ft.tiers;
+                    for (let t = 0; t < tiers.length; t++) {
+                        // Ensure each tier has bands
+                        if (!tiers[t].bands) tiers[t].bands = bands || [{ setIndex: 0, weight: 1 }];
+                        const tierBands = tiers[t].bands;
+                        const tierBandTotal = tierBands.reduce(function(s, b) { return s + (b.weight || 0); }, 0);
 
+                        html += '<div style="border: 1px solid #333; border-radius: 6px; padding: 10px; margin-bottom: 8px; background: #0a0a0a;">';
+                        html += '<div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">';
+                        html += '<span style="font-size: 0.85em; color: #ff8c00; font-weight: bold;">Tier ' + (t + 1) + ':</span>';
+                        html += '<input type="number" class="ft-tier-count" data-set="' + i + '" data-tier="' + t + '" value="' + tiers[t].count + '" min="1" max="7" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 4px 8px; border-radius: 4px; width: 50px; text-align: center; font-size: 0.85em;">';
+                        html += '<span style="font-size: 0.8em; color: #aaa;">scatters =</span>';
+                        html += '<input type="number" class="ft-tier-spins" data-set="' + i + '" data-tier="' + t + '" value="' + tiers[t].spins + '" min="1" style="background: #000; border: 1px solid #ff8c00; color: #fff; padding: 4px 8px; border-radius: 4px; width: 50px; text-align: center; font-size: 0.85em;">';
+                        html += '<span style="font-size: 0.8em; color: #aaa;">spins</span>';
+                        if (tiers.length > 1) {
+                            html += '<button class="ft-tier-remove" data-set="' + i + '" data-tier="' + t + '" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 1em; margin-left: auto;">&#10005;</button>';
+                        }
+                        html += '</div>';
+
+                        // Reel bands for this tier
+                        html += '<div style="margin-left: 15px;">';
+                        html += '<span style="font-size: 0.75em; color: #666; display: block; margin-bottom: 4px;">Reel Bands:</span>';
+                        for (let b = 0; b < tierBands.length; b++) {
+                            const tband = tierBands[b];
+                            const tbPct = tierBandTotal > 0 ? ((tband.weight / tierBandTotal) * 100).toFixed(1) : '0';
+                            html += '<div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">';
+                            html += '<select class="ft-tier-band-select" data-set="' + i + '" data-tier="' + t + '" data-band="' + b + '" style="background: #000; border: 1px solid #333; color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 0.8em;">';
+                            for (let ri = 0; ri < gameData.reelSets.length; ri++) {
+                                html += '<option value="' + ri + '"' + (ri === tband.setIndex ? ' selected' : '') + '>' + gameData.reelSets[ri].name + '</option>';
+                            }
+                            html += '</select>';
+                            html += '<input type="number" class="ft-tier-band-weight" data-set="' + i + '" data-tier="' + t + '" data-band="' + b + '" value="' + tband.weight + '" min="0" step="1" style="background: #000; border: 1px solid #333; color: #fff; padding: 3px 6px; border-radius: 4px; width: 50px; font-size: 0.8em; text-align: center;">';
+                            html += '<span style="font-size: 0.75em; color: #ff8c00; min-width: 35px;">' + tbPct + '%</span>';
+                            if (tierBands.length > 1) {
+                                html += '<button class="ft-tier-band-remove" data-set="' + i + '" data-tier="' + t + '" data-band="' + b + '" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 0.9em;">&#10005;</button>';
+                            }
+                            html += '</div>';
+                        }
+                        html += '<button class="ft-tier-band-add" data-set="' + i + '" data-tier="' + t + '" style="padding: 3px 8px; font-size: 0.7em; background: #222; color: #ff8c00; border: 1px solid #333; border-radius: 4px; cursor: pointer;">+ Band</button>';
+                        html += '</div>';
+                        html += '</div>';
+                    }
+                    html += '<button class="ft-tier-add" data-set="' + i + '" style="margin-top: 8px; padding: 5px 12px; font-size: 0.8em; background: #333; color: #ff8c00; border: 1px solid #ff8c00; border-radius: 4px; cursor: pointer;">+ Add Tier</button>';
                     html += `</div>
-                                    <button class="ft-band-add" data-set="${i}" style="margin-top: 8px; padding: 5px 12px; font-size: 0.8em; background: #333; color: #ff8c00; border: 1px solid #ff8c00;">+ Add Reel Band</button>
-                                </div>
                                 <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #333;">
                                     <span style="font-size: 0.85em; color: #aaa; display: block; margin-bottom: 8px;">Retrigger:</span>
                                     <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px; cursor: pointer;">
@@ -1210,7 +1283,6 @@
                             </div>`;
                         }
                         html += `<button class="rt-band-add" data-set="${i}" style="margin-top: 6px; padding: 4px 10px; font-size: 0.75em; background: #333; color: #ff8c00; border: 1px solid #ff8c00; border-radius: 4px; cursor: pointer;">+ Add Band</button>`;
-                    }
                     }
 
                     // Collect Retrigger
@@ -1260,7 +1332,6 @@
                         }
                         html += `<button class="col-band-add" data-set="${i}" style="margin-top: 6px; padding: 4px 10px; font-size: 0.75em; background: #333; color: #00cc88; border: 1px solid #00cc88; border-radius: 4px; cursor: pointer;">+ Add Band</button>`;
                     }
-                    }
 
                     html += `</div>`;
 
@@ -1291,6 +1362,12 @@
                     } else if (mod.type === 'expandingWilds') {
                         html += `<span class="mod-toggle-btn" data-set="${i}" data-mod="${m}" style="background: #1a1a1a; border: 1px solid #00cc88; border-radius: 6px; padding: 4px 10px; font-size: 0.8em; color: #00cc88; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
                             🔥 Expanding Wilds
+                            <button class="mod-remove-btn" data-set="${i}" data-mod="${m}" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 1em; padding: 0 4px;">&#10005;</button>
+                        </span>`;
+                    } else if (mod.type === 'coinValues') {
+                        const numCoins = Object.keys(mod.overrides || {}).length;
+                        html += `<span class="mod-toggle-btn" data-set="${i}" data-mod="${m}" style="background: #1a1a1a; border: 1px solid #cc8800; border-radius: 6px; padding: 4px 10px; font-size: 0.8em; color: #cc8800; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                            🪙 Coin Values (${numCoins} symbols)
                             <button class="mod-remove-btn" data-set="${i}" data-mod="${m}" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 1em; padding: 0 4px;">&#10005;</button>
                         </span>`;
                     }
@@ -1335,10 +1412,35 @@
                         ewHtml += '<p style="color: #aaa; font-size: 0.8em;">When a Wild lands on any reel, the entire visible column becomes Wild. This is factored into the RTP calculation automatically.</p>';
                         ewHtml += '</div>';
                         html += ewHtml;
+                    } else if (mod.type === 'coinValues' && !mod._collapsed) {
+                        let cvHtml = '<div style="margin-top: 10px; border: 1px solid #333; border-radius: 8px; padding: 12px; background: #111;">';
+                        cvHtml += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">';
+                        cvHtml += '<h4 style="color: #cc8800; margin: 0; font-size: 0.85em;">Coin Values (this reel band)</h4>';
+                        cvHtml += '<button class="mod-collapse-btn" data-set="' + i + '" data-mod="' + m + '" style="background: none; border: none; color: #cc8800; cursor: pointer; font-size: 1.1em;">&#9662;</button>';
+                        cvHtml += '</div>';
+                        const overrides = mod.overrides || {};
+                        for (const sym of Object.keys(overrides)) {
+                            cvHtml += '<div style="margin-bottom: 8px;">';
+                            cvHtml += '<span style="color: #cc8800; font-weight: bold; font-size: 0.85em;">' + sym + ':</span>';
+                            cvHtml += '<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;">';
+                            const vals = overrides[sym];
+                            for (let cv = 0; cv < vals.length; cv++) {
+                                cvHtml += '<span style="display: inline-flex; align-items: center; gap: 3px; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 2px 5px;">';
+                                cvHtml += '<input type="number" class="mod-cv-val" data-set="' + i + '" data-mod="' + m + '" data-sym="' + sym + '" data-cv="' + cv + '" value="' + vals[cv].value + '" min="0" step="0.5" style="background: #000; border: 1px solid #cc8800; color: #fff; padding: 2px 4px; border-radius: 3px; width: 40px; text-align: center; font-size: 0.85em;">x ';
+                                cvHtml += '<input type="number" class="mod-cv-wt" data-set="' + i + '" data-mod="' + m + '" data-sym="' + sym + '" data-cv="' + cv + '" value="' + vals[cv].weight + '" min="0" step="1" style="background: #000; border: 1px solid #333; color: #aaa; padding: 2px 4px; border-radius: 3px; width: 35px; text-align: center; font-size: 0.85em;">%';
+                                cvHtml += '<button class="mod-cv-rm" data-set="' + i + '" data-mod="' + m + '" data-sym="' + sym + '" data-cv="' + cv + '" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 0.8em;">&#10005;</button>';
+                                cvHtml += '</span>';
+                            }
+                            cvHtml += '<button class="mod-cv-add" data-set="' + i + '" data-mod="' + m + '" data-sym="' + sym + '" style="background: #222; border: 1px solid #cc8800; color: #cc8800; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75em;">+</button>';
+                            cvHtml += '</div></div>';
+                        }
+                        cvHtml += '</div>';
+                        html += cvHtml;
                     }
                 }
 
                 html += `</td></tr>`;
+            }
 
             html += '</table>';
             html += `<div style="margin-top: 15px; display: flex; gap: 10px;">
@@ -1398,56 +1500,95 @@
                 sel.addEventListener('change', (e) => {
                     const idx = parseInt(e.target.dataset.set);
                     gameData.reelSets[idx].featureTrigger.triggerSymbol = e.target.value;
+                    renderCustomReelSetsPanel();
                 });
             });
 
-            container.querySelectorAll('.ft-trigger-count').forEach(input => {
+            container.querySelectorAll('.ft-tier-count').forEach(input => {
                 input.addEventListener('change', (e) => {
                     const idx = parseInt(e.target.dataset.set);
-                    gameData.reelSets[idx].featureTrigger.triggerCount = parseInt(e.target.value) || 3;
+                    const tierIdx = parseInt(e.target.dataset.tier);
+                    if (!gameData.reelSets[idx].featureTrigger.tiers) {
+                        gameData.reelSets[idx].featureTrigger.tiers = [{ count: gameData.reelSets[idx].featureTrigger.triggerCount || 3, spins: gameData.reelSets[idx].featureTrigger.numSpins || 10 }];
+                    }
+                    gameData.reelSets[idx].featureTrigger.tiers[tierIdx].count = parseInt(e.target.value) || 3;
+                    gameData.reelSets[idx].featureTrigger.triggerCount = Math.min.apply(null, gameData.reelSets[idx].featureTrigger.tiers.map(function(t) { return t.count; }));
+                    renderCustomReelSetsPanel();
                 });
             });
 
-            container.querySelectorAll('.ft-num-spins').forEach(input => {
+            container.querySelectorAll('.ft-tier-spins').forEach(input => {
                 input.addEventListener('change', (e) => {
                     const idx = parseInt(e.target.dataset.set);
-                    gameData.reelSets[idx].featureTrigger.numSpins = parseInt(e.target.value) || 10;
+                    const tierIdx = parseInt(e.target.dataset.tier);
+                    if (!gameData.reelSets[idx].featureTrigger.tiers) {
+                        gameData.reelSets[idx].featureTrigger.tiers = [{ count: gameData.reelSets[idx].featureTrigger.triggerCount || 3, spins: gameData.reelSets[idx].featureTrigger.numSpins || 10 }];
+                    }
+                    gameData.reelSets[idx].featureTrigger.tiers[tierIdx].spins = parseInt(e.target.value) || 10;
+                    gameData.reelSets[idx].featureTrigger.numSpins = gameData.reelSets[idx].featureTrigger.tiers[0].spins;
+                    renderCustomReelSetsPanel();
                 });
             });
 
-            // Reel band selects
-            container.querySelectorAll('.ft-band-select').forEach(sel => {
+            container.querySelectorAll('.ft-tier-remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const tierIdx = parseInt(e.target.dataset.tier);
+                    gameData.reelSets[idx].featureTrigger.tiers.splice(tierIdx, 1);
+                    gameData.reelSets[idx].featureTrigger.triggerCount = Math.min.apply(null, gameData.reelSets[idx].featureTrigger.tiers.map(function(t) { return t.count; }));
+                    gameData.reelSets[idx].featureTrigger.numSpins = gameData.reelSets[idx].featureTrigger.tiers[0].spins;
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            container.querySelectorAll('.ft-tier-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    if (!gameData.reelSets[idx].featureTrigger.tiers) {
+                        gameData.reelSets[idx].featureTrigger.tiers = [{ count: gameData.reelSets[idx].featureTrigger.triggerCount || 3, spins: gameData.reelSets[idx].featureTrigger.numSpins || 10 }];
+                    }
+                    var lastTier = gameData.reelSets[idx].featureTrigger.tiers[gameData.reelSets[idx].featureTrigger.tiers.length - 1];
+                    gameData.reelSets[idx].featureTrigger.tiers.push({ count: lastTier.count + 1, spins: lastTier.spins + 5 });
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Per-tier reel band bindings
+            container.querySelectorAll('.ft-tier-band-select').forEach(sel => {
                 sel.addEventListener('change', (e) => {
                     const idx = parseInt(e.target.dataset.set);
+                    const tierIdx = parseInt(e.target.dataset.tier);
                     const bandIdx = parseInt(e.target.dataset.band);
-                    gameData.reelSets[idx].featureTrigger.reelBands[bandIdx].setIndex = parseInt(e.target.value);
+                    gameData.reelSets[idx].featureTrigger.tiers[tierIdx].bands[bandIdx].setIndex = parseInt(e.target.value);
+                    renderCustomReelSetsPanel();
                 });
             });
 
-            container.querySelectorAll('.ft-band-weight').forEach(input => {
+            container.querySelectorAll('.ft-tier-band-weight').forEach(input => {
                 input.addEventListener('change', (e) => {
                     const idx = parseInt(e.target.dataset.set);
+                    const tierIdx = parseInt(e.target.dataset.tier);
                     const bandIdx = parseInt(e.target.dataset.band);
-                    gameData.reelSets[idx].featureTrigger.reelBands[bandIdx].weight = Math.max(0, parseFloat(e.target.value) || 0);
+                    gameData.reelSets[idx].featureTrigger.tiers[tierIdx].bands[bandIdx].weight = Math.max(0, parseFloat(e.target.value) || 0);
                     renderCustomReelSetsPanel();
                 });
             });
 
-            // Remove reel band
-            container.querySelectorAll('.ft-band-remove').forEach(btn => {
+            container.querySelectorAll('.ft-tier-band-remove').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const idx = parseInt(e.target.dataset.set);
+                    const tierIdx = parseInt(e.target.dataset.tier);
                     const bandIdx = parseInt(e.target.dataset.band);
-                    gameData.reelSets[idx].featureTrigger.reelBands.splice(bandIdx, 1);
+                    gameData.reelSets[idx].featureTrigger.tiers[tierIdx].bands.splice(bandIdx, 1);
                     renderCustomReelSetsPanel();
                 });
             });
 
-            // Add reel band
-            container.querySelectorAll('.ft-band-add').forEach(btn => {
+            container.querySelectorAll('.ft-tier-band-add').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const idx = parseInt(e.target.dataset.set);
-                    gameData.reelSets[idx].featureTrigger.reelBands.push({ setIndex: 0, weight: 1 });
+                    const tierIdx = parseInt(e.target.dataset.tier);
+                    gameData.reelSets[idx].featureTrigger.tiers[tierIdx].bands.push({ setIndex: 0, weight: 1 });
                     renderCustomReelSetsPanel();
                 });
             });
@@ -1476,6 +1617,7 @@
                 input.addEventListener('change', (e) => {
                     const idx = parseInt(e.target.dataset.set);
                     gameData.reelSets[idx].featureTrigger.retriggerScatters = parseInt(e.target.value) || 3;
+                    renderCustomReelSetsPanel();
                 });
             });
 
@@ -1483,6 +1625,7 @@
                 input.addEventListener('change', (e) => {
                     const idx = parseInt(e.target.dataset.set);
                     gameData.reelSets[idx].featureTrigger.retriggerSpins = parseInt(e.target.value) || 5;
+                    renderCustomReelSetsPanel();
                 });
             });
 
@@ -1622,7 +1765,7 @@
             container.querySelectorAll('.mod-add-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const idx = parseInt(e.target.dataset.set);
-                    const modType = prompt('Select modifier type:\n\n1. Multiplier Wilds\n2. Expanding Wilds\n\nEnter number:');
+                    const modType = prompt('Select modifier type:\n\n1. Multiplier Wilds\n2. Expanding Wilds\n3. Custom Coin Values\n\nEnter number:');
                     if (modType === '1') {
                         if (!gameData.reelSets[idx].modifiers) gameData.reelSets[idx].modifiers = [];
                         gameData.reelSets[idx].modifiers.push({
@@ -1641,6 +1784,22 @@
                         gameData.reelSets[idx].modifiers.push({
                             type: 'expandingWilds',
                             _collapsed: true
+                        });
+                        syncModifiersToEngine(idx);
+                        renderCustomReelSetsPanel();
+                    } else if (modType === '3') {
+                        if (!gameData.reelSets[idx].modifiers) gameData.reelSets[idx].modifiers = [];
+                        // Copy coin values from global paytable as starting point
+                        const coinOverrides = {};
+                        for (const entry of gameData.paytable) {
+                            if (entry.isCoin && entry.coinValues) {
+                                coinOverrides[entry.symbol] = entry.coinValues.map(cv => ({...cv}));
+                            }
+                        }
+                        gameData.reelSets[idx].modifiers.push({
+                            type: 'coinValues',
+                            _collapsed: false,
+                            overrides: coinOverrides
                         });
                         syncModifiersToEngine(idx);
                         renderCustomReelSetsPanel();
@@ -1717,6 +1876,47 @@
                     const modIdx = parseInt(e.target.dataset.mod);
                     gameData.reelSets[idx].modifiers[modIdx].entries.push({ multiplier: 2, chance: 0.1 });
                     syncModifiersToEngine(idx);
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Coin values modifier bindings
+            container.querySelectorAll('.mod-cv-val').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const modIdx = parseInt(e.target.dataset.mod);
+                    const sym = e.target.dataset.sym;
+                    const cvIdx = parseInt(e.target.dataset.cv);
+                    gameData.reelSets[idx].modifiers[modIdx].overrides[sym][cvIdx].value = parseFloat(e.target.value) || 0;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.mod-cv-wt').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const modIdx = parseInt(e.target.dataset.mod);
+                    const sym = e.target.dataset.sym;
+                    const cvIdx = parseInt(e.target.dataset.cv);
+                    gameData.reelSets[idx].modifiers[modIdx].overrides[sym][cvIdx].weight = parseFloat(e.target.value) || 0;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.mod-cv-rm').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const modIdx = parseInt(e.target.dataset.mod);
+                    const sym = e.target.dataset.sym;
+                    const cvIdx = parseInt(e.target.dataset.cv);
+                    gameData.reelSets[idx].modifiers[modIdx].overrides[sym].splice(cvIdx, 1);
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.mod-cv-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const modIdx = parseInt(e.target.dataset.mod);
+                    const sym = e.target.dataset.sym;
+                    gameData.reelSets[idx].modifiers[modIdx].overrides[sym].push({ value: 1, weight: 10 });
                     renderCustomReelSetsPanel();
                 });
             });
@@ -1838,19 +2038,35 @@
         wizReels.addEventListener('input', renderWizPreview);
         wizRows.addEventListener('input', renderWizPreview);
 
-        // Step 1 → Step 2
+        // Step 1 → Step 2 (or Step 3 if Ways)
         wizStep1Next.addEventListener('click', () => {
             const reels = parseInt(wizReels.value);
             const rows = parseInt(wizRows.value);
-            // Only initialize win lines if not pre-populated (i.e. fresh new PAR)
-            if (!wizAddingReelSet || wizWinLines.length === 0) {
-                wizWinLines = [new Array(reels).fill(1)];
+            const winType = document.getElementById('wizWinType').value;
+
+            if (winType === 'ways') {
+                // Skip win lines — generate all-ways automatically
+                const totalWays = Math.pow(rows, reels);
+                wizWinLines = [];
+                // For ways, we generate one "line" per possible combination
+                // Actually for ways we don't use win lines at all — store the mode
+                wizWinLines = [new Array(reels).fill(1)]; // placeholder
+                wizCurrentLine = 0;
+                wizardStep1.style.display = 'none';
+                document.getElementById('wizardStep2').style.display = 'none';
+                document.getElementById('wizardStep3').style.display = 'block';
+                renderWizPaytable();
+            } else {
+                // Lines mode
+                if (!wizAddingReelSet || wizWinLines.length === 0) {
+                    wizWinLines = [new Array(reels).fill(1)];
+                }
+                wizCurrentLine = 0;
+                wizardStep1.style.display = 'none';
+                wizardStep2.style.display = 'block';
+                renderWizLineGrid();
+                renderWizLinesList();
             }
-            wizCurrentLine = 0;
-            wizardStep1.style.display = 'none';
-            wizardStep2.style.display = 'block';
-            renderWizLineGrid();
-            renderWizLinesList();
         });
 
         // Step 2 → Step 1
@@ -2045,7 +2261,7 @@
                 headerHtml += `<th style="padding: 8px 10px;">${i} of a Kind</th>`;
             }
             headerHtml += `<th style="padding: 8px 10px;">Weight %</th>`;
-            headerHtml += '<th style="padding: 8px 10px;">Wild</th><th style="padding: 8px 10px;">Feature</th></tr>';
+            headerHtml += '<th style="padding: 8px 10px;">Wild</th><th style="padding: 8px 10px;">Feature</th><th style="padding: 8px 10px; color: #00cc88;">Coin</th><th style="padding: 8px 10px; color: #cc8800;">Collector</th></tr>';
             thead.innerHTML = headerHtml;
 
             // Build rows
@@ -2147,7 +2363,66 @@
                 tdFeat.appendChild(featCb);
                 tr.appendChild(tdFeat);
 
+                // Coin checkbox
+                const tdCoin = document.createElement('td');
+                tdCoin.style.cssText = 'padding: 8px 10px; text-align: center;';
+                const coinCb = document.createElement('input');
+                coinCb.type = 'checkbox';
+                coinCb.checked = entry.isCoin || false;
+                coinCb.style.cssText = 'width: 18px; height: 18px; accent-color: #00cc88; cursor: pointer;';
+                coinCb.addEventListener('change', (e) => {
+                    wizPaytableData[idx].isCoin = e.target.checked;
+                    if (e.target.checked && !wizPaytableData[idx].coinValues) {
+                        wizPaytableData[idx].coinValues = [
+                            { value: 1, weight: 50 },
+                            { value: 2, weight: 30 },
+                            { value: 5, weight: 20 }
+                        ];
+                    }
+                    renderWizPaytable();
+                });
+                coinCb.addEventListener('click', (e) => e.stopPropagation());
+                tdCoin.appendChild(coinCb);
+                tr.appendChild(tdCoin);
+
+                // Collector checkbox
+                const tdCollector = document.createElement('td');
+                tdCollector.style.cssText = 'padding: 8px 10px; text-align: center;';
+                const collCb = document.createElement('input');
+                collCb.type = 'checkbox';
+                collCb.checked = entry.isCollector || false;
+                collCb.style.cssText = 'width: 18px; height: 18px; accent-color: #cc8800; cursor: pointer;';
+                collCb.addEventListener('change', (e) => {
+                    wizPaytableData[idx].isCollector = e.target.checked;
+                });
+                collCb.addEventListener('click', (e) => e.stopPropagation());
+                tdCollector.appendChild(collCb);
+                tr.appendChild(tdCollector);
+
                 tbody.appendChild(tr);
+
+                // Coin values row (if coin is enabled)
+                if (entry.isCoin && entry.coinValues) {
+                    const coinRow = document.createElement('tr');
+                    coinRow.style.cssText = 'background: #0a0a0a;';
+                    const coinTd = document.createElement('td');
+                    coinTd.colSpan = 4 + (reels - 2) + 3;
+                    coinTd.style.cssText = 'padding: 8px 10px 8px 30px; font-size: 0.8em;';
+                    let coinHtml = '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">';
+                    coinHtml += '<span style="color: #00cc88; font-weight: bold;">Coin Values:</span>';
+                    for (let cv = 0; cv < entry.coinValues.length; cv++) {
+                        coinHtml += '<span style="display: inline-flex; align-items: center; gap: 4px; background: #111; border: 1px solid #333; border-radius: 4px; padding: 2px 6px;">';
+                        coinHtml += '<input type="number" class="coin-value-input" data-sym="' + idx + '" data-cv="' + cv + '" value="' + entry.coinValues[cv].value + '" min="0" step="0.5" style="background: #000; border: 1px solid #00cc88; color: #fff; padding: 2px 4px; border-radius: 3px; width: 45px; text-align: center; font-size: 0.9em;">x';
+                        coinHtml += '<input type="number" class="coin-weight-input" data-sym="' + idx + '" data-cv="' + cv + '" value="' + entry.coinValues[cv].weight + '" min="0" step="1" style="background: #000; border: 1px solid #333; color: #aaa; padding: 2px 4px; border-radius: 3px; width: 40px; text-align: center; font-size: 0.9em;">%';
+                        coinHtml += '<button class="coin-value-remove" data-sym="' + idx + '" data-cv="' + cv + '" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 0.9em;">&#10005;</button>';
+                        coinHtml += '</span>';
+                    }
+                    coinHtml += '<button class="coin-value-add" data-sym="' + idx + '" style="background: #222; border: 1px solid #00cc88; color: #00cc88; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">+</button>';
+                    coinHtml += '</div>';
+                    coinTd.innerHTML = coinHtml;
+                    coinRow.appendChild(coinTd);
+                    tbody.appendChild(coinRow);
+                }
             });
 
             // Total weight row
@@ -2169,7 +2444,46 @@
             totalRow.appendChild(tdEmpty1);
             const tdEmpty2 = document.createElement('td');
             totalRow.appendChild(tdEmpty2);
+            const tdEmpty3 = document.createElement('td');
+            totalRow.appendChild(tdEmpty3);
+            const tdEmpty4 = document.createElement('td');
+            totalRow.appendChild(tdEmpty4);
             tbody.appendChild(totalRow);
+
+            // Bind coin value events
+            document.querySelectorAll('.coin-value-input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const symIdx = parseInt(e.target.dataset.sym);
+                    const cvIdx = parseInt(e.target.dataset.cv);
+                    wizPaytableData[symIdx].coinValues[cvIdx].value = parseFloat(e.target.value) || 0;
+                });
+                input.addEventListener('click', (e) => e.stopPropagation());
+            });
+            document.querySelectorAll('.coin-weight-input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const symIdx = parseInt(e.target.dataset.sym);
+                    const cvIdx = parseInt(e.target.dataset.cv);
+                    wizPaytableData[symIdx].coinValues[cvIdx].weight = parseFloat(e.target.value) || 0;
+                });
+                input.addEventListener('click', (e) => e.stopPropagation());
+            });
+            document.querySelectorAll('.coin-value-remove').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const symIdx = parseInt(e.target.dataset.sym);
+                    const cvIdx = parseInt(e.target.dataset.cv);
+                    wizPaytableData[symIdx].coinValues.splice(cvIdx, 1);
+                    renderWizPaytable();
+                });
+            });
+            document.querySelectorAll('.coin-value-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const symIdx = parseInt(e.target.dataset.sym);
+                    wizPaytableData[symIdx].coinValues.push({ value: 1, weight: 10 });
+                    renderWizPaytable();
+                });
+            });
         }
 
         // Add symbol
@@ -2256,7 +2570,13 @@
                 for (const entry of wizPaytableData) {
                     const existing = gameData.paytable.find(e => e.symbol === entry.symbol);
                     if (!existing) {
-                        gameData.paytable.push({ symbol: entry.symbol, pays: { ...entry.pays } });
+                        gameData.paytable.push({
+                            symbol: entry.symbol,
+                            pays: { ...entry.pays },
+                            isCoin: entry.isCoin || false,
+                            coinValues: entry.coinValues ? entry.coinValues.map(cv => ({...cv})) : null,
+                            isCollector: entry.isCollector || false
+                        });
                     }
                 }
 
@@ -2272,10 +2592,11 @@
                 // === INITIAL CREATION ===
                 document.getElementById('numReels').value = reels;
                 document.getElementById('numRows').value = rows;
-                document.getElementById('numLines').value = wizWinLines.length;
+
+                const winType = document.getElementById('wizWinType').value;
 
                 const wildSymbols = wizPaytableData.filter(e => e.isWild).map(e => e.symbol);
-                document.getElementById('wildSymbol').value = wildSymbols[0] || 'W';
+                document.getElementById('wildSymbol').value = wildSymbols.join(',') || 'W';
                 const featureSymbols = wizPaytableData.filter(e => e.isFeature).map(e => e.symbol);
                 document.getElementById('scatterSymbol').value = featureSymbols[0] || 'S';
 
@@ -2285,11 +2606,32 @@
                 // Set paytable directly from wizard
                 gameData.paytable = wizPaytableData.map(entry => ({
                     symbol: entry.symbol,
-                    pays: { ...entry.pays }
+                    pays: { ...entry.pays },
+                    isCoin: entry.isCoin || false,
+                    coinValues: entry.coinValues ? entry.coinValues.map(cv => ({...cv})) : null,
+                    isCollector: entry.isCollector || false
                 }));
 
-                // Set win lines directly from wizard
-                gameData.winLines = wizWinLines.map(l => [...l]);
+                // Set win lines based on win type
+                if (winType === 'ways') {
+                    // Generate all ways - every row combination across reels
+                    gameData.winLines = [];
+                    function generateWays(reelIdx, current) {
+                        if (reelIdx === reels) {
+                            gameData.winLines.push([...current]);
+                            return;
+                        }
+                        for (let row = 1; row <= rows; row++) {
+                            current.push(row);
+                            generateWays(reelIdx + 1, current);
+                            current.pop();
+                        }
+                    }
+                    generateWays(0, []);
+                } else {
+                    gameData.winLines = wizWinLines.map(l => [...l]);
+                }
+                document.getElementById('numLines').value = gameData.winLines.length;
 
                 // Build reel strips using weights
                 gameData.reelStrips = buildReelStrips(reels, wizPaytableData);

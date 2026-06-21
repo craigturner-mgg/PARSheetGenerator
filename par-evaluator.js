@@ -251,6 +251,12 @@ function parseExportedWorkbook(workbook) {
     const payData = XLSX.utils.sheet_to_json(paySheet, { header: 1 });
 
     gameData.paytable = [];
+    // Find column indices from header
+    const payHeaderRow = payData[0] || [];
+    const coinColIdx = payHeaderRow.indexOf('isCoin');
+    const collColIdx = payHeaderRow.indexOf('isCollector');
+    const coinValColIdx = payHeaderRow.indexOf('CoinValues');
+
     for (let i = 1; i < payData.length; i++) {
         const row = payData[i];
         if (!row || !row[0]) break;
@@ -264,7 +270,24 @@ function parseExportedWorkbook(workbook) {
                 if (!isNaN(num)) pays[len] = num;
             }
         }
-        gameData.paytable.push({ symbol, pays });
+        const entry = { symbol, pays };
+
+        // Read Coin/Collector properties
+        if (coinColIdx >= 0 && row[coinColIdx]) {
+            entry.isCoin = String(row[coinColIdx]).toUpperCase() === 'TRUE';
+        }
+        if (collColIdx >= 0 && row[collColIdx]) {
+            entry.isCollector = String(row[collColIdx]).toUpperCase() === 'TRUE';
+        }
+        if (coinValColIdx >= 0 && row[coinValColIdx]) {
+            try {
+                entry.coinValues = JSON.parse(row[coinValColIdx]);
+            } catch(e) {
+                entry.coinValues = null;
+            }
+        }
+
+        gameData.paytable.push(entry);
     }
 
     // --- Parse Win Lines sheet ---
@@ -629,13 +652,20 @@ function parseSheet(sheet) {
 }
 
 function getConfig() {
+    const wildStr = document.getElementById('wildSymbol').value.trim();
+    const wildSymbols = wildStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
     return {
         numReels: parseInt(document.getElementById('numReels').value),
         numRows: parseInt(document.getElementById('numRows').value),
         numLines: parseInt(document.getElementById('numLines').value),
-        wildSymbol: document.getElementById('wildSymbol').value.trim(),
+        wildSymbol: wildSymbols[0] || 'W', // primary wild for backwards compat
+        wildSymbols: wildSymbols, // all wilds
         scatterSymbol: document.getElementById('scatterSymbol').value.trim()
     };
+}
+
+function isWildSymbol(symbol, config) {
+    return config.wildSymbols && config.wildSymbols.includes(symbol);
 }
 
 // ============ EVALUATION ENGINE ============
@@ -714,8 +744,11 @@ function runEvaluation() {
     // Calculate free games RTP contribution
     const freeGamesRtp = calculateFreeGamesRtp(config, perSetResults);
 
+    // Calculate Coin + Collector RTP contribution
+    const coinCollectorRtp = calculateCoinCollectorRtp(config, totalWeight);
+
     // Display results using active set detail but weighted totals
-    const weightedRtp = (weightedTotalPayout * 100) + freeGamesRtp.totalContribution;
+    const weightedRtp = (weightedTotalPayout * 100) + freeGamesRtp.totalContribution + coinCollectorRtp;
     const weightedHitFreq = weightedTotalHits;
 
     displayResultsWeighted(weightedRtp, weightedHitFreq, allSymbolResults, primaryScatterResults,
@@ -1070,6 +1103,106 @@ function calculateLevelProgression(config) {
     return progressionData;
 }
 
+function calculateCoinCollectorRtp(config, totalWeight) {
+    // Calculates the RTP contribution from Coin + Collector mechanics.
+    // When a Collector symbol is visible, it collects the values of all visible Coin symbols.
+    //
+    // For each reel set:
+    //   - P(collector visible) = 1 - P(no collector in any window position)
+    //   - Expected coins visible = sum across reels of (coin stops / reel length * numRows)
+    //   - Expected coin value = weighted average of coin values
+    //   - Contribution = P(collector) * expected_coins_visible * expected_coin_value * weight_fraction
+
+    if (!gameData.paytable) return 0;
+
+    const coinSymbols = gameData.paytable.filter(e => e.isCoin && e.coinValues && e.coinValues.length > 0);
+    const collectorSymbols = gameData.paytable.filter(e => e.isCollector);
+
+    if (coinSymbols.length === 0 || collectorSymbols.length === 0) return 0;
+
+    let totalContribution = 0;
+
+    for (let setIdx = 0; setIdx < gameData.reelSets.length; setIdx++) {
+        const reelSet = gameData.reelSets[setIdx];
+        if (reelSet.weight <= 0) continue;
+        if (!reelSet.reelStrips || reelSet.reelStrips.length === 0 || reelSet.reelStrips[0].length === 0) continue;
+
+        const weightFraction = totalWeight > 0 ? reelSet.weight / totalWeight : 0;
+        const strips = reelSet.reelStrips;
+
+        // Calculate expected coin value (weighted average across all coin symbols)
+        let totalExpectedCoinValue = 0;
+
+        for (const coinSym of coinSymbols) {
+            // Check for per-set coin value overrides
+            let coinVals = coinSym.coinValues;
+            if (reelSet.modifiers) {
+                const cvMod = reelSet.modifiers.find(m => m.type === 'coinValues');
+                if (cvMod && cvMod.overrides && cvMod.overrides[coinSym.symbol]) {
+                    coinVals = cvMod.overrides[coinSym.symbol];
+                }
+            }
+
+            // Expected value of this coin symbol when it appears
+            const totalCoinWeight = coinVals.reduce((s, cv) => s + cv.weight, 0);
+            const expectedValue = totalCoinWeight > 0
+                ? coinVals.reduce((s, cv) => s + (cv.value * cv.weight / totalCoinWeight), 0)
+                : 0;
+
+            // Expected number of this coin symbol visible per spin
+            // For each reel, P(coin in window) = min(coinStops * numRows, reelLength) / reelLength
+            // Expected coins from this reel = coinStops on reel * numRows / reelLength (approx, capped at numRows)
+            let expectedCoinsVisible = 0;
+            for (let r = 0; r < config.numReels; r++) {
+                const reelLength = strips[r].length;
+                const coinStops = strips[r].filter(s => s === coinSym.symbol).length;
+                // Each stop position shows numRows symbols; probability of at least one coin per position
+                // More precisely: expected coins in window = coinStops * numRows / reelLength (if << reelLength)
+                expectedCoinsVisible += (coinStops * config.numRows) / reelLength;
+            }
+
+            totalExpectedCoinValue += expectedCoinsVisible * expectedValue;
+        }
+
+        // Calculate probability of at least one collector being visible
+        let pNoCollector = 1;
+        for (let r = 0; r < config.numReels; r++) {
+            const reelLength = strips[r].length;
+            let collectorStops = 0;
+            for (const collSym of collectorSymbols) {
+                collectorStops += strips[r].filter(s => s === collSym.symbol).length;
+            }
+            // P(no collector on this reel in window) = (reelLength - collectorStops * numRows capped) / reelLength
+            // More precisely: stops that show NO collector in window
+            let noCollectorStops = 0;
+            for (let stop = 0; stop < reelLength; stop++) {
+                let hasCollector = false;
+                for (let row = 0; row < config.numRows; row++) {
+                    const idx = (stop + row) % reelLength;
+                    for (const collSym of collectorSymbols) {
+                        if (strips[r][idx] === collSym.symbol) {
+                            hasCollector = true;
+                            break;
+                        }
+                    }
+                    if (hasCollector) break;
+                }
+                if (!hasCollector) noCollectorStops++;
+            }
+            pNoCollector *= noCollectorStops / reelLength;
+        }
+        const pCollector = 1 - pNoCollector;
+
+        // RTP contribution (as percentage)
+        // collector pay = expected total coin value in window
+        // This is per-spin, so: P(collector) * expectedCoinValue * 100 (to get percentage)
+        const contribution = pCollector * totalExpectedCoinValue * weightFraction * 100;
+        totalContribution += contribution;
+    }
+
+    return totalContribution;
+}
+
 function calculateLineWins(config, reelLengths, totalCombinations, wildMultipliers, expandingWilds) {
     const wildSymbol = config.wildSymbol;
     const scatterSymbol = config.scatterSymbol;
@@ -1138,7 +1271,7 @@ function calculateLineWins(config, reelLengths, totalCombinations, wildMultiplie
 
 function countLineCombosForSymbolWithWildSplit(symbol, length, line, config, reelLengths, wildSymbol, scatterSymbol, expandingWilds) {
     // Returns { total, withWild, noWild } - splitting combos by whether they involve wilds
-    const isWildSymbol = (symbol === wildSymbol);
+    const isThisWild = config.wildSymbols ? config.wildSymbols.includes(symbol) : (symbol === wildSymbol);
 
     // Check for expanding wilds (passed from caller)
     const hasExpandingWilds = !!expandingWilds;
@@ -1163,7 +1296,7 @@ function countLineCombosForSymbolWithWildSplit(symbol, length, line, config, ree
                 let hasWildInWindow = false;
                 for (let r = 0; r < config.numRows; r++) {
                     const idx = (stop + r) % reelLength;
-                    if (reelStrip[idx] === wildSymbol) {
+                    if (config.wildSymbols ? config.wildSymbols.includes(reelStrip[idx]) : reelStrip[idx] === wildSymbol) {
                         hasWildInWindow = true;
                         break;
                     }
@@ -1172,23 +1305,23 @@ function countLineCombosForSymbolWithWildSplit(symbol, length, line, config, ree
 
                 if (hasWildInWindow) {
                     wilds++;
-                    if (!isWildSymbol) matches++;
+                    if (!isThisWild) matches++;
                 } else if (visibleSymbol === symbol) {
                     matches++;
                     pureSymbol++;
-                } else if (visibleSymbol === wildSymbol) {
+                } else if (config.wildSymbols ? config.wildSymbols.includes(visibleSymbol) : visibleSymbol === wildSymbol) {
                     // Shouldn't happen if expanding wilds catches all, but safety
                     wilds++;
-                    if (!isWildSymbol) matches++;
+                    if (!isThisWild) matches++;
                 }
             }
         } else {
             // Standard: only the specific row position matters
             for (let stop = 0; stop < reelLength; stop++) {
                 const visibleSymbol = getSymbolAtPosition(reel, stop, row, config);
-                if (visibleSymbol === wildSymbol) {
+                if (config.wildSymbols ? config.wildSymbols.includes(visibleSymbol) : visibleSymbol === wildSymbol) {
                     wilds++;
-                    if (!isWildSymbol) matches++;
+                    if (!isThisWild) matches++;
                 } else if (visibleSymbol === symbol) {
                     matches++;
                     pureSymbol++;
@@ -1196,7 +1329,7 @@ function countLineCombosForSymbolWithWildSplit(symbol, length, line, config, ree
             }
         }
 
-        if (isWildSymbol) {
+        if (isThisWild) {
             matchCounts.push(wilds);
             pureSymbolCounts.push(wilds);
         } else {
@@ -1219,7 +1352,7 @@ function countLineCombosForSymbolWithWildSplit(symbol, length, line, config, ree
         }
     }
 
-    if (isWildSymbol) {
+    if (isThisWild) {
         // All wild wins inherently involve wilds, but the multiplier applies to
         // non-wild symbols that include wilds. Pure wild wins don't get extra multiplier.
         return { total: totalCombos, withWild: 0, noWild: totalCombos };
@@ -1347,17 +1480,23 @@ function displayResultsWeighted(rtp, hitFreq, symbolResults, scatterResults, tot
     rtpEl.textContent = rtp.toFixed(4) + '%';
     rtpEl.className = 'value ' + (rtp >= 94 ? 'good' : rtp >= 90 ? 'warning' : 'bad');
 
-    // Show base/FG split if free games are contributing
-    const rtpCard = rtpEl.parentElement;
-    let existingSplit = rtpCard.querySelector('.rtp-split');
-    if (existingSplit) existingSplit.remove();
-    if (freeGamesRtp && freeGamesRtp.totalContribution > 0) {
-        const baseRtp = rtp - freeGamesRtp.totalContribution;
-        const splitEl = document.createElement('div');
-        splitEl.className = 'rtp-split';
-        splitEl.style.cssText = 'font-size: 0.75em; color: #aaa; margin-top: 6px;';
-        splitEl.innerHTML = `Base: ${baseRtp.toFixed(4)}% | Free Games: ${freeGamesRtp.totalContribution.toFixed(4)}%`;
-        rtpCard.appendChild(splitEl);
+    // RTP Breakdown
+    const breakdownEl = document.getElementById('rtpBreakdown');
+    if (breakdownEl) {
+        const totalWeightForCoins = gameData.reelSets.reduce((sum, rs) => sum + rs.weight, 0);
+        const coinRtp = calculateCoinCollectorRtp(config, totalWeightForCoins);
+        const fgRtp = freeGamesRtp ? freeGamesRtp.totalContribution : 0;
+        const lineRtp = rtp - fgRtp - coinRtp;
+
+        let parts = [];
+        parts.push('Line Wins: <span style="color: #fff;">' + lineRtp.toFixed(4) + '%</span>');
+        if (fgRtp > 0) {
+            parts.push('Free Games: <span style="color: #fff;">' + fgRtp.toFixed(4) + '%</span>');
+        }
+        if (coinRtp > 0) {
+            parts.push('Coin/Collector: <span style="color: #fff;">' + coinRtp.toFixed(4) + '%</span>');
+        }
+        breakdownEl.innerHTML = parts.join(' &nbsp;|&nbsp; ');
     }
 
     const hitEl = document.getElementById('hitFreqValue');
@@ -1387,6 +1526,39 @@ function displayResultsWeighted(rtp, hitFreq, symbolResults, scatterResults, tot
             }
         } else {
             featureHitEl.textContent = 'N/A';
+        }
+    }
+
+    // Coin Hit Rate - probability of collector being visible (triggering a coin win)
+    const coinHitEl = document.getElementById('coinHitRate');
+    if (coinHitEl) {
+        const coinSyms = gameData.paytable.filter(e => e.isCoin && e.coinValues && e.coinValues.length > 0);
+        const collSyms = gameData.paytable.filter(e => e.isCollector).map(e => e.symbol);
+        if (coinSyms.length > 0 && collSyms.length > 0) {
+            const activeReelSet = gameData.reelSets[gameData.activeReelSet];
+            if (activeReelSet && activeReelSet.reelStrips && activeReelSet.reelStrips[0]) {
+                const strips = activeReelSet.reelStrips;
+                let pNoCollector = 1;
+                for (let r = 0; r < config.numReels; r++) {
+                    const rl = strips[r].length;
+                    let noCollStops = 0;
+                    for (let stop = 0; stop < rl; stop++) {
+                        let hasColl = false;
+                        for (let row = 0; row < config.numRows; row++) {
+                            const idx = (stop + row) % rl;
+                            if (collSyms.includes(strips[r][idx])) { hasColl = true; break; }
+                        }
+                        if (!hasColl) noCollStops++;
+                    }
+                    pNoCollector *= noCollStops / rl;
+                }
+                const pCollector = 1 - pNoCollector;
+                coinHitEl.textContent = pCollector > 0 ? '1 in ' + (1 / pCollector).toFixed(2) : 'N/A';
+            } else {
+                coinHitEl.textContent = 'N/A';
+            }
+        } else {
+            coinHitEl.textContent = 'N/A';
         }
     }
 
@@ -2261,44 +2433,134 @@ function renderPaytableEditor() {
         return;
     }
 
-    let html = `<table class="paytable-edit-table"><tr>
-        <th></th>
-        <th>Symbol</th>`;
+    let html = '<table class="paytable-edit-table"><tr><th></th><th>Symbol</th>';
     for (let len = 3; len <= config.numReels; len++) {
-        html += `<th>${len}-of-a-kind</th>`;
+        html += '<th>' + len + 'OAK</th>';
     }
-    html += '</tr>';
+    html += '<th style="color: #ff8c00;">Wild</th><th style="color: #00cc88;">Coin</th><th style="color: #cc8800;">Collector</th></tr>';
 
     for (let i = 0; i < gameData.paytable.length; i++) {
         const entry = gameData.paytable[i];
         const rowClass = i === selectedPaytableRow ? 'selected-row' : '';
-        html += `<tr class="${rowClass}" data-index="${i}">
-            <td><input type="radio" name="paytableSelect" value="${i}" ${i === selectedPaytableRow ? 'checked' : ''}></td>
-            <td class="symbol-cell"><span class="symbol-badge ${typeof getSymbolColorClass === 'function' ? getSymbolColorClass(entry.symbol) : getSymbolColorClassPay(entry.symbol)}">${entry.symbol}</span></td>`;
+        html += '<tr class="' + rowClass + '" data-index="' + i + '">';
+        html += '<td><input type="radio" name="paytableSelect" value="' + i + '"' + (i === selectedPaytableRow ? ' checked' : '') + '></td>';
+        html += '<td class="symbol-cell"><span class="symbol-badge ' + (typeof getSymbolColorClass === 'function' ? getSymbolColorClass(entry.symbol) : '') + '">' + entry.symbol + '</span></td>';
         for (let len = 3; len <= config.numReels; len++) {
             const val = entry.pays[len];
             const displayVal = val !== undefined ? val : '';
-            html += `<td><input type="number" step="0.01" min="0" value="${displayVal}" data-symbol="${i}" data-len="${len}" placeholder="N/A"></td>`;
+            html += '<td><input type="number" step="0.01" min="0" value="' + displayVal + '" data-symbol="' + i + '" data-len="' + len + '" placeholder="N/A"></td>';
         }
+        html += '<td style="text-align: center;"><input type="checkbox" class="pay-wild-cb" data-idx="' + i + '"' + (config.wildSymbols && config.wildSymbols.includes(entry.symbol) ? ' checked' : '') + ' style="width: 16px; height: 16px; accent-color: #ff8c00;"></td>';
+        html += '<td style="text-align: center;"><input type="checkbox" class="pay-coin-cb" data-idx="' + i + '"' + (entry.isCoin ? ' checked' : '') + ' style="width: 16px; height: 16px; accent-color: #00cc88;"></td>';
+        html += '<td style="text-align: center;"><input type="checkbox" class="pay-coll-cb" data-idx="' + i + '"' + (entry.isCollector ? ' checked' : '') + ' style="width: 16px; height: 16px; accent-color: #cc8800;"></td>';
         html += '</tr>';
+
+        // Coin values sub-row
+        if (entry.isCoin && entry.coinValues) {
+            html += '<tr style="background: #0a0a0a;"><td colspan="' + (5 + config.numReels - 2) + '" style="padding: 6px 10px 6px 30px; font-size: 0.8em;">';
+            html += '<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">';
+            html += '<span style="color: #00cc88;">Values:</span>';
+            for (let cv = 0; cv < entry.coinValues.length; cv++) {
+                html += '<span style="display: inline-flex; align-items: center; gap: 3px; background: #111; border: 1px solid #333; border-radius: 4px; padding: 2px 5px;">';
+                html += '<input type="number" class="pay-cv-val" data-idx="' + i + '" data-cv="' + cv + '" value="' + entry.coinValues[cv].value + '" min="0" step="0.5" style="background: #000; border: 1px solid #00cc88; color: #fff; padding: 2px 4px; border-radius: 3px; width: 40px; text-align: center; font-size: 0.85em;">x';
+                html += '<input type="number" class="pay-cv-wt" data-idx="' + i + '" data-cv="' + cv + '" value="' + entry.coinValues[cv].weight + '" min="0" step="1" style="background: #000; border: 1px solid #333; color: #aaa; padding: 2px 4px; border-radius: 3px; width: 35px; text-align: center; font-size: 0.85em;">%';
+                html += '<button class="pay-cv-rm" data-idx="' + i + '" data-cv="' + cv + '" style="background: none; border: none; color: #ff4444; cursor: pointer;">&#10005;</button>';
+                html += '</span>';
+            }
+            html += '<button class="pay-cv-add" data-idx="' + i + '" style="background: #222; border: 1px solid #00cc88; color: #00cc88; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">+</button>';
+            html += '</div></td></tr>';
+        }
     }
 
     html += '</table>';
     container.innerHTML = html;
 
-    // Bind input change events
-    container.querySelectorAll('input[type="number"]').forEach(input => {
+    // Bind pay value inputs
+    container.querySelectorAll('input[type="number"][data-len]').forEach(input => {
         input.addEventListener('change', (e) => {
             const idx = parseInt(e.target.dataset.symbol);
             const len = parseInt(e.target.dataset.len);
             const val = e.target.value.trim();
-
             if (val === '' || isNaN(parseFloat(val))) {
                 delete gameData.paytable[idx].pays[len];
             } else {
                 gameData.paytable[idx].pays[len] = parseFloat(val);
             }
+            runEvaluation();
+        });
+    });
 
+    // Bind Wild checkbox
+    container.querySelectorAll('.pay-wild-cb').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            // Build comma-separated list of all checked wild symbols
+            const wildSyms = [];
+            container.querySelectorAll('.pay-wild-cb').forEach(wcb => {
+                if (wcb.checked) {
+                    const wIdx = parseInt(wcb.dataset.idx);
+                    wildSyms.push(gameData.paytable[wIdx].symbol);
+                }
+            });
+            document.getElementById('wildSymbol').value = wildSyms.join(',');
+            renderPaytableEditor();
+            runEvaluation();
+        });
+    });
+
+    // Bind Coin checkbox
+    container.querySelectorAll('.pay-coin-cb').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            gameData.paytable[idx].isCoin = e.target.checked;
+            if (e.target.checked && !gameData.paytable[idx].coinValues) {
+                gameData.paytable[idx].coinValues = [{ value: 1, weight: 50 }, { value: 2, weight: 30 }, { value: 5, weight: 20 }];
+            }
+            renderPaytableEditor();
+            runEvaluation();
+        });
+    });
+
+    // Bind Collector checkbox
+    container.querySelectorAll('.pay-coll-cb').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            gameData.paytable[idx].isCollector = e.target.checked;
+            runEvaluation();
+        });
+    });
+
+    // Coin value/weight inputs
+    container.querySelectorAll('.pay-cv-val').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            const cvIdx = parseInt(e.target.dataset.cv);
+            gameData.paytable[idx].coinValues[cvIdx].value = parseFloat(e.target.value) || 0;
+            runEvaluation();
+        });
+    });
+    container.querySelectorAll('.pay-cv-wt').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            const cvIdx = parseInt(e.target.dataset.cv);
+            gameData.paytable[idx].coinValues[cvIdx].weight = parseFloat(e.target.value) || 0;
+            runEvaluation();
+        });
+    });
+    container.querySelectorAll('.pay-cv-rm').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            const cvIdx = parseInt(e.target.dataset.cv);
+            gameData.paytable[idx].coinValues.splice(cvIdx, 1);
+            renderPaytableEditor();
+            runEvaluation();
+        });
+    });
+    container.querySelectorAll('.pay-cv-add').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            gameData.paytable[idx].coinValues.push({ value: 1, weight: 10 });
+            renderPaytableEditor();
             runEvaluation();
         });
     });
@@ -2416,6 +2678,31 @@ function calculateWinDistribution() {
         return wildMultipliers[wildMultipliers.length - 1].multiplier;
     }
 
+    // Get coin/collector config
+    const coinSymbols = gameData.paytable.filter(e => e.isCoin && e.coinValues && e.coinValues.length > 0);
+    const collectorSymbols = gameData.paytable.filter(e => e.isCollector).map(e => e.symbol);
+    const hasCoinMechanic = coinSymbols.length > 0 && collectorSymbols.length > 0;
+
+    // Per-set coin value overrides
+    let coinValueOverrides = {};
+    if (activeSet.modifiers) {
+        const cvMod = activeSet.modifiers.find(m => m.type === 'coinValues');
+        if (cvMod && cvMod.overrides) coinValueOverrides = cvMod.overrides;
+    }
+
+    function sampleCoinValue(coinEntry) {
+        const vals = coinValueOverrides[coinEntry.symbol] || coinEntry.coinValues;
+        const totalWt = vals.reduce((s, cv) => s + cv.weight, 0);
+        if (totalWt <= 0) return 0;
+        const rand = Math.random() * totalWt;
+        let cum = 0;
+        for (const cv of vals) {
+            cum += cv.weight;
+            if (rand <= cum) return cv.value;
+        }
+        return vals[vals.length - 1].value;
+    }
+
     function processChunk() {
         const end = Math.min(processed + chunkSize, sampleSize);
 
@@ -2429,12 +2716,41 @@ function calculateWinDistribution() {
             // Sample a wild multiplier for this spin
             const spinWildMult = sampleWildMultiplier();
 
-            // Calculate total win for this spin
+            // Calculate line wins for this spin
             let totalWin = 0;
             for (const line of gameData.winLines) {
                 const result = getLineWinAmountFast(line, stops, config);
                 if (result.pay > 0) {
                     totalWin += result.hasWild ? result.pay * spinWildMult : result.pay;
+                }
+            }
+
+            // Calculate coin wins if mechanic is active
+            if (hasCoinMechanic) {
+                // Check if collector is visible in this spin's window
+                let collectorVisible = false;
+                for (let r = 0; r < config.numReels && !collectorVisible; r++) {
+                    for (let row = 0; row < config.numRows; row++) {
+                        const idx = (stops[r] + row) % reelLengths[r];
+                        if (collectorSymbols.includes(gameData.reelStrips[r][idx])) {
+                            collectorVisible = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (collectorVisible) {
+                    // Sum all coin values visible in window
+                    for (let r = 0; r < config.numReels; r++) {
+                        for (let row = 0; row < config.numRows; row++) {
+                            const idx = (stops[r] + row) % reelLengths[r];
+                            const sym = gameData.reelStrips[r][idx];
+                            const coinEntry = coinSymbols.find(c => c.symbol === sym);
+                            if (coinEntry) {
+                                totalWin += sampleCoinValue(coinEntry);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -2498,7 +2814,7 @@ function getLineWinAmountFast(line, stops, config) {
     let leadSymbol = null;
     let allWild = true;
     for (let r = 0; r < numReels; r++) {
-        if (syms[r] !== wildSymbol) {
+        if (!(config.wildSymbols ? config.wildSymbols.includes(syms[r]) : syms[r] === wildSymbol)) {
             if (syms[r] === scatterSymbol) {
                 // Scatter breaks a line win at position 0
                 if (r === 0) return { pay: 0, hasWild: false };
@@ -2515,13 +2831,13 @@ function getLineWinAmountFast(line, stops, config) {
         matchLen = numReels;
         leadSymbol = wildSymbol;
         for (let r = 0; r < numReels; r++) {
-            if (syms[r] !== wildSymbol) {
+            if (!(config.wildSymbols ? config.wildSymbols.includes(syms[r]) : syms[r] === wildSymbol)) {
                 matchLen = r;
                 break;
             }
         }
         if (matchLen >= 3) {
-            const wildEntry = gameData.paytable.find(e => e.symbol === wildSymbol);
+            const wildEntry = gameData.paytable.find(e => config.wildSymbols ? config.wildSymbols.includes(e.symbol) : e.symbol === wildSymbol);
             const pay = (wildEntry && wildEntry.pays[matchLen]) ? wildEntry.pays[matchLen] : 0;
             return { pay, hasWild: false }; // Pure wild wins don't get extra multiplier
         }
@@ -2532,8 +2848,8 @@ function getLineWinAmountFast(line, stops, config) {
     matchLen = 0;
     let hasWild = false;
     for (let r = 0; r < numReels; r++) {
-        if (syms[r] === leadSymbol || syms[r] === wildSymbol) {
-            if (syms[r] === wildSymbol) hasWild = true;
+        if (syms[r] === leadSymbol || (config.wildSymbols ? config.wildSymbols.includes(syms[r]) : syms[r] === wildSymbol)) {
+            if (config.wildSymbols ? config.wildSymbols.includes(syms[r]) : syms[r] === wildSymbol) hasWild = true;
             matchLen++;
         } else {
             break;
@@ -2549,11 +2865,11 @@ function getLineWinAmountFast(line, stops, config) {
     // Also check if pure-wild length is longer/better
     let wildLen = 0;
     for (let r = 0; r < numReels; r++) {
-        if (syms[r] === wildSymbol) wildLen++;
+        if (config.wildSymbols ? config.wildSymbols.includes(syms[r]) : syms[r] === wildSymbol) wildLen++;
         else break;
     }
     if (wildLen >= 3) {
-        const wildEntry = gameData.paytable.find(e => e.symbol === wildSymbol);
+        const wildEntry = gameData.paytable.find(e => config.wildSymbols ? config.wildSymbols.includes(e.symbol) : e.symbol === wildSymbol);
         if (wildEntry && wildEntry.pays[wildLen] && wildEntry.pays[wildLen] > entry.pays[matchLen]) {
             return { pay: wildEntry.pays[wildLen], hasWild: false }; // Pure wild win
         }
@@ -2814,12 +3130,17 @@ function exportToExcel() {
     for (let len = 3; len <= config.numReels; len++) {
         payHeader.push(`${len}x`);
     }
+    payHeader.push('isCoin', 'isCollector', 'CoinValues');
     const payRows = [payHeader];
     for (const entry of gameData.paytable) {
         const row = [entry.symbol, entry.symbol];
         for (let len = 3; len <= config.numReels; len++) {
             row.push(entry.pays[len] !== undefined ? entry.pays[len] : 'N/A');
         }
+        row.push(entry.isCoin ? 'TRUE' : 'FALSE');
+        row.push(entry.isCollector ? 'TRUE' : 'FALSE');
+        // Coin values as JSON string
+        row.push(entry.isCoin && entry.coinValues ? JSON.stringify(entry.coinValues) : '');
         payRows.push(row);
     }
     const paySheet = XLSX.utils.aoa_to_sheet(payRows);
