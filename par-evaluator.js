@@ -256,6 +256,8 @@ function parseExportedWorkbook(workbook) {
     const coinColIdx = payHeaderRow.indexOf('isCoin');
     const collColIdx = payHeaderRow.indexOf('isCollector');
     const coinValColIdx = payHeaderRow.indexOf('CoinValues');
+    const wildColIdx = payHeaderRow.indexOf('isWild');
+    const importedWilds = [];
 
     for (let i = 1; i < payData.length; i++) {
         const row = payData[i];
@@ -287,7 +289,19 @@ function parseExportedWorkbook(workbook) {
             }
         }
 
+        // Read Wild flag
+        if (wildColIdx >= 0 && row[wildColIdx]) {
+            if (String(row[wildColIdx]).toUpperCase() === 'TRUE') {
+                importedWilds.push(entry.symbol);
+            }
+        }
+
         gameData.paytable.push(entry);
+    }
+
+    // Set wild symbols from imported data
+    if (importedWilds.length > 0) {
+        document.getElementById('wildSymbol').value = importedWilds.join(',');
     }
 
     // --- Parse Win Lines sheet ---
@@ -436,6 +450,37 @@ function parseExportedWorkbook(workbook) {
                 }
             } else if (matchSet) {
                 matchSet.featureTrigger = { enabled: false, targetSetIndex: -1, awards: [], globalMultiplier: 1, retrigger: true };
+            }
+        }
+    }
+
+    // --- Parse Lock & Spin sheet ---
+    if (sheetNames.includes('Lock & Spin')) {
+        const lasData = XLSX.utils.sheet_to_json(workbook.Sheets['Lock & Spin'], { header: 1 });
+        for (let i = 3; i < lasData.length; i++) {
+            const row = lasData[i];
+            if (!row || !row[0]) continue;
+            const setName = String(row[0]);
+            const enabled = row[1] === true || row[1] === 'TRUE' || row[1] === 1;
+            const matchSet = gameData.reelSets.find(rs => rs.name === setName);
+            if (matchSet && enabled) {
+                matchSet.lockAndSpin = {
+                    enabled: true,
+                    triggerSymbol: String(row[2] || 'COIN'),
+                    triggerCount: parseInt(row[3]) || 6,
+                    lives: parseInt(row[4]) || 3,
+                    payMode: String(row[5] || 'coins'),
+                    respinWeights: [],
+                    coinValues: []
+                };
+                try { matchSet.lockAndSpin.respinWeights = JSON.parse(row[6]); } catch(e) {}
+                try { matchSet.lockAndSpin.coinValues = JSON.parse(row[7]); } catch(e) {}
+                if (!matchSet.lockAndSpin.respinWeights || matchSet.lockAndSpin.respinWeights.length === 0) {
+                    matchSet.lockAndSpin.respinWeights = [{ symbol: 'COIN', weight: 20 }, { symbol: 'EMPTY', weight: 80 }];
+                }
+                if (!matchSet.lockAndSpin.coinValues || matchSet.lockAndSpin.coinValues.length === 0) {
+                    matchSet.lockAndSpin.coinValues = [{ value: 1, weight: 50 }, { value: 2, weight: 30 }, { value: 5, weight: 15 }, { value: 10, weight: 5 }];
+                }
             }
         }
     }
@@ -747,8 +792,11 @@ function runEvaluation() {
     // Calculate Coin + Collector RTP contribution
     const coinCollectorRtp = calculateCoinCollectorRtp(config, totalWeight);
 
+    // Calculate Lock & Spin RTP contribution
+    const lockAndSpinRtp = calculateLockAndSpinRtp(config, totalWeight);
+
     // Display results using active set detail but weighted totals
-    const weightedRtp = (weightedTotalPayout * 100) + freeGamesRtp.totalContribution + coinCollectorRtp;
+    const weightedRtp = (weightedTotalPayout * 100) + freeGamesRtp.totalContribution + coinCollectorRtp + lockAndSpinRtp;
     const weightedHitFreq = weightedTotalHits;
 
     displayResultsWeighted(weightedRtp, weightedHitFreq, allSymbolResults, primaryScatterResults,
@@ -1101,6 +1149,130 @@ function calculateLevelProgression(config) {
     }
 
     return progressionData;
+}
+
+function calculateLockAndSpinRtp(config, totalWeight) {
+    // Calculates expected RTP from Lock & Spin mechanics using simulation.
+    // For each reel set with L&S enabled:
+    //   1. Calculate probability of triggering (X coins in view)
+    //   2. Simulate the L&S feature: locked coins + respins with weighted outcomes
+    //   3. Expected value = P(trigger) * E(feature_payout)
+
+    if (!gameData.paytable) return 0;
+    let totalContribution = 0;
+
+    for (let setIdx = 0; setIdx < gameData.reelSets.length; setIdx++) {
+        const reelSet = gameData.reelSets[setIdx];
+        if (reelSet.weight <= 0) continue;
+        if (!reelSet.lockAndSpin || !reelSet.lockAndSpin.enabled) continue;
+        if (!reelSet.reelStrips || reelSet.reelStrips.length === 0 || reelSet.reelStrips[0].length === 0) continue;
+
+        const las = reelSet.lockAndSpin;
+        const weightFraction = totalWeight > 0 ? reelSet.weight / totalWeight : 0;
+        const strips = reelSet.reelStrips;
+        const triggerSym = las.triggerSymbol || 'COIN';
+        const triggerCount = las.triggerCount || 6;
+        const lives = las.lives || 3;
+        const payMode = las.payMode || 'coins';
+        const respinWeights = las.respinWeights || [{ symbol: triggerSym, weight: 20 }, { symbol: 'EMPTY', weight: 80 }];
+        const totalPositions = config.numReels * config.numRows;
+
+        // Calculate trigger probability
+        // P(trigger) = P(at least triggerCount coins visible in window)
+        // Approximate: expected coins per spin, then use Poisson/binomial approximation
+        let expectedCoinsPerSpin = 0;
+        for (let r = 0; r < config.numReels; r++) {
+            const rl = strips[r].length;
+            const coinStops = strips[r].filter(s => s === triggerSym).length;
+            expectedCoinsPerSpin += (coinStops * config.numRows) / rl;
+        }
+
+        // Binomial approximation: P(X >= triggerCount) where X ~ Binomial(totalPositions, p)
+        const p = expectedCoinsPerSpin / totalPositions;
+        let pTrigger = 0;
+        for (let k = triggerCount; k <= totalPositions; k++) {
+            pTrigger += binomialProbability(totalPositions, k, p);
+        }
+
+        if (pTrigger <= 0) continue;
+
+        // Expected value of the L&S feature once triggered
+        // Simulate: start with triggerCount coins, respin empty positions
+        // Each respin either lands a coin (resetting lives) or empty (losing a life)
+        const totalRespinWeight = respinWeights.reduce((s, w) => s + w.weight, 0);
+        const pCoinOnRespin = respinWeights.filter(w => w.symbol !== 'EMPTY').reduce((s, w) => s + w.weight, 0) / totalRespinWeight;
+
+        // Expected total coins at end of feature (geometric/Markov approximation)
+        // Starting coins: triggerCount, empty positions: totalPositions - triggerCount
+        // Each respin: P(coin) lands one more, resets lives. P(empty) loses a life.
+        let expectedTotalCoins = triggerCount;
+        let emptyPositions = totalPositions - triggerCount;
+        let currentLives = lives;
+
+        // Simple simulation: expected additional coins from respins
+        // E(additional) = sum of geometric series of fills
+        // Each "round" of respins: expected coins before life expires
+        if (emptyPositions > 0 && pCoinOnRespin > 0) {
+            // Expected additional coins per feature using Markov chain approximation
+            // In each respin step: P(coin) fills one spot and resets lives, P(empty) loses a life
+            // Feature ends when lives reach 0 or all positions filled
+            // E(additional coins) ≈ lives * pCoin / (1 - pCoin) (geometric with resets)
+            // More precise: expected coins before losing all lives consecutively
+            const expectedBeforeDeath = pCoinOnRespin / (Math.pow(1 - pCoinOnRespin, lives));
+            const additionalCoins = Math.min(expectedBeforeDeath, emptyPositions);
+            expectedTotalCoins += additionalCoins;
+        }
+
+        // Expected payout value
+        let expectedPayout = 0;
+        if (payMode === 'coins') {
+            // Get expected value per coin - use L&S custom coin values if defined
+            let expectedCoinVal = 1;
+            if (las.coinValues && las.coinValues.length > 0) {
+                // Use Lock & Spin specific coin values
+                const totalWt = las.coinValues.reduce((s, cv) => s + cv.weight, 0);
+                expectedCoinVal = totalWt > 0 ? las.coinValues.reduce((s, cv) => s + (cv.value * cv.weight / totalWt), 0) : 1;
+            } else {
+                // Fall back to paytable coin values
+                const coinEntry = gameData.paytable.find(e => e.symbol === triggerSym);
+                if (coinEntry && coinEntry.isCoin && coinEntry.coinValues) {
+                    let coinVals = coinEntry.coinValues;
+                    if (reelSet.modifiers) {
+                        const cvMod = reelSet.modifiers.find(m => m.type === 'coinValues');
+                        if (cvMod && cvMod.overrides && cvMod.overrides[triggerSym]) {
+                            coinVals = cvMod.overrides[triggerSym];
+                        }
+                    }
+                    const totalWt = coinVals.reduce((s, cv) => s + cv.weight, 0);
+                    expectedCoinVal = totalWt > 0 ? coinVals.reduce((s, cv) => s + (cv.value * cv.weight / totalWt), 0) : 1;
+                }
+            }
+            expectedPayout = expectedTotalCoins * expectedCoinVal;
+        } else {
+            // Lines mode: approximate as line wins RTP * fill percentage
+            const fillPct = expectedTotalCoins / totalPositions;
+            expectedPayout = fillPct * 10; // rough approximation
+        }
+
+        // RTP contribution (as percentage)
+        const contribution = pTrigger * expectedPayout * weightFraction * 100;
+        totalContribution += contribution;
+    }
+
+    return totalContribution;
+}
+
+function binomialProbability(n, k, p) {
+    if (k > n || k < 0) return 0;
+    if (p === 0) return k === 0 ? 1 : 0;
+    if (p === 1) return k === n ? 1 : 0;
+    // Use log to avoid overflow for large n
+    let logProb = 0;
+    for (let i = 0; i < k; i++) {
+        logProb += Math.log(n - i) - Math.log(i + 1);
+    }
+    logProb += k * Math.log(p) + (n - k) * Math.log(1 - p);
+    return Math.exp(logProb);
 }
 
 function calculateCoinCollectorRtp(config, totalWeight) {
@@ -1485,8 +1657,9 @@ function displayResultsWeighted(rtp, hitFreq, symbolResults, scatterResults, tot
     if (breakdownEl) {
         const totalWeightForCoins = gameData.reelSets.reduce((sum, rs) => sum + rs.weight, 0);
         const coinRtp = calculateCoinCollectorRtp(config, totalWeightForCoins);
+        const lasRtp = calculateLockAndSpinRtp(config, totalWeightForCoins);
         const fgRtp = freeGamesRtp ? freeGamesRtp.totalContribution : 0;
-        const lineRtp = rtp - fgRtp - coinRtp;
+        const lineRtp = rtp - fgRtp - coinRtp - lasRtp;
 
         let parts = [];
         parts.push('Line Wins: <span style="color: #fff;">' + lineRtp.toFixed(4) + '%</span>');
@@ -1495,6 +1668,9 @@ function displayResultsWeighted(rtp, hitFreq, symbolResults, scatterResults, tot
         }
         if (coinRtp > 0) {
             parts.push('Coin/Collector: <span style="color: #fff;">' + coinRtp.toFixed(4) + '%</span>');
+        }
+        if (lasRtp > 0) {
+            parts.push('Lock & Spin: <span style="color: #fff;">' + lasRtp.toFixed(4) + '%</span>');
         }
         breakdownEl.innerHTML = parts.join(' &nbsp;|&nbsp; ');
     }
@@ -2159,6 +2335,11 @@ function initDataSubTabs() {
                     calculateWinDistribution();
                 }
             }
+
+            // Trigger Lock & Spin simulation when that sub-tab is shown
+            if (btn.dataset.subtab === 'subLockSpin') {
+                simulateLockAndSpin();
+            }
         });
     });
 }
@@ -2633,6 +2814,126 @@ function getSymbolColorClassPay(symbol) {
     return known.includes(symbol) ? `symbol-color-${symbol}` : 'symbol-color-default';
 }
 
+// ============ LOCK & SPIN SIMULATION ============
+function simulateLockAndSpin() {
+    const container = document.getElementById('lockSpinData');
+    if (!container) return;
+
+    const activeSet = gameData.reelSets[gameData.activeReelSet];
+    if (!activeSet || !activeSet.lockAndSpin || !activeSet.lockAndSpin.enabled) {
+        container.innerHTML = '<p style="color: #666;">Lock & Spin is not enabled on this reel set.</p>';
+        return;
+    }
+
+    const config = getConfig();
+    const las = activeSet.lockAndSpin;
+    const totalPositions = config.numReels * config.numRows;
+    const lives = las.lives || 3;
+    const respinWeights = las.respinWeights || [{ symbol: 'COIN', weight: 20 }, { symbol: 'EMPTY', weight: 80 }];
+    const totalRespinWeight = respinWeights.reduce((s, w) => s + w.weight, 0);
+    const pCoinOnRespin = respinWeights.filter(w => w.symbol !== 'EMPTY').reduce((s, w) => s + w.weight, 0) / totalRespinWeight;
+    const triggerCount = las.triggerCount || 6;
+
+    // Coin values for sampling
+    const coinValues = las.coinValues || [{ value: 1, weight: 50 }, { value: 2, weight: 30 }, { value: 5, weight: 15 }, { value: 10, weight: 5 }];
+    const totalCoinWt = coinValues.reduce((s, cv) => s + cv.weight, 0);
+
+    function sampleCoinVal() {
+        const rand = Math.random() * totalCoinWt;
+        let cum = 0;
+        for (const cv of coinValues) {
+            cum += cv.weight;
+            if (rand <= cum) return cv.value;
+        }
+        return coinValues[coinValues.length - 1].value;
+    }
+
+    // Simulate many L&S features
+    const numSims = 100000;
+    let totalWin = 0;
+    const endStateCounts = new Array(totalPositions + 1).fill(0); // index = empty positions at end
+
+    container.innerHTML = '<p style="color: #cc44ff;">Simulating ' + numSims.toLocaleString() + ' Lock & Spin features...</p>';
+
+    setTimeout(() => {
+        for (let sim = 0; sim < numSims; sim++) {
+            // Start with triggerCount coins locked, each with a sampled value
+            let filledPositions = triggerCount;
+            let totalValue = 0;
+            for (let c = 0; c < triggerCount; c++) {
+                totalValue += sampleCoinVal();
+            }
+
+            // Respin loop
+            let currentLives = lives;
+            while (currentLives > 0 && filledPositions < totalPositions) {
+                const emptyPositions = totalPositions - filledPositions;
+                // Each empty position independently tries to land a coin
+                let landed = false;
+                for (let ep = 0; ep < emptyPositions; ep++) {
+                    if (Math.random() < pCoinOnRespin) {
+                        filledPositions++;
+                        totalValue += sampleCoinVal();
+                        landed = true;
+                    }
+                }
+                if (landed) {
+                    currentLives = lives; // reset lives
+                } else {
+                    currentLives--;
+                }
+            }
+
+            totalWin += totalValue;
+            const emptyAtEnd = totalPositions - filledPositions;
+            endStateCounts[emptyAtEnd]++;
+        }
+
+        const avgWin = totalWin / numSims;
+
+        // Display results
+        let html = '<h3 style="color: #cc44ff; margin-bottom: 15px;">Lock & Spin Analysis</h3>';
+        html += '<p style="color: #aaa; font-size: 0.85em; margin-bottom: 15px;">Based on ' + numSims.toLocaleString() + ' simulated features (starting with ' + triggerCount + ' coins locked).</p>';
+
+        html += '<div style="display: flex; gap: 20px; margin-bottom: 20px;">';
+        html += '<div style="background: #111; border: 1px solid #cc44ff; border-radius: 8px; padding: 15px; flex: 1;">';
+        html += '<div style="color: #aaa; font-size: 0.85em;">Average Feature Win</div>';
+        html += '<div style="color: #fff; font-size: 1.8em; font-weight: bold;">' + avgWin.toFixed(2) + 'x</div>';
+        html += '</div>';
+        html += '<div style="background: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; flex: 1;">';
+        html += '<div style="color: #aaa; font-size: 0.85em;">Full Board Rate</div>';
+        html += '<div style="color: #fff; font-size: 1.8em; font-weight: bold;">' + ((endStateCounts[0] / numSims) * 100).toFixed(2) + '%</div>';
+        html += '</div>';
+        html += '<div style="background: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; flex: 1;">';
+        html += '<div style="color: #aaa; font-size: 0.85em;">Avg Coins at End</div>';
+        html += '<div style="color: #fff; font-size: 1.8em; font-weight: bold;">' + (totalPositions - endStateCounts.reduce((s, c, idx) => s + (idx * c), 0) / numSims).toFixed(1) + '</div>';
+        html += '</div>';
+        html += '</div>';
+
+        // End state distribution table
+        html += '<h4 style="color: #cc44ff; margin-bottom: 10px;">End State Distribution (empty positions remaining)</h4>';
+        html += '<table style="width: 100%; font-size: 0.85em;"><tr><th>Empty Positions</th><th>Coins Filled</th><th>Count</th><th>Probability</th><th>Distribution</th></tr>';
+
+        for (let ep = 0; ep <= totalPositions; ep++) {
+            if (endStateCounts[ep] === 0) continue;
+            const pct = (endStateCounts[ep] / numSims) * 100;
+            const barWidth = Math.round((endStateCounts[ep] / numSims) * 200);
+            const label = ep === 0 ? 'FULL BOARD' : ep + ' empty';
+            const color = ep === 0 ? '#00ff88' : '#cc44ff';
+            html += '<tr>';
+            html += '<td style="padding: 4px 8px; color: ' + color + ';">' + label + '</td>';
+            html += '<td style="padding: 4px 8px;">' + (totalPositions - ep) + ' / ' + totalPositions + '</td>';
+            html += '<td style="padding: 4px 8px;">' + endStateCounts[ep].toLocaleString() + '</td>';
+            html += '<td style="padding: 4px 8px; font-weight: bold;">' + pct.toFixed(2) + '%</td>';
+            html += '<td style="padding: 4px 8px;"><div style="height: 12px; width: ' + barWidth + 'px; background: ' + color + '; border-radius: 3px;"></div></td>';
+            html += '</tr>';
+        }
+        html += '</table>';
+
+        container.innerHTML = html;
+    }, 10);
+}
+
 // ============ WIN DISTRIBUTION ============
 function calculateWinDistribution() {
     const config = getConfig();
@@ -2930,9 +3231,10 @@ function displayWinDistribution(bands, bandCounts, totalSamples, maxWinSeen) {
 }
 
 // ============ EXPORT TO EXCEL ============
-document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
+document.getElementById('exportExcelBtn').addEventListener('click', function() { exportToExcelJS(); });
 
 function exportToExcel() {
+  try {
     const config = getConfig();
     const wb = XLSX.utils.book_new();
 
@@ -3130,8 +3432,9 @@ function exportToExcel() {
     for (let len = 3; len <= config.numReels; len++) {
         payHeader.push(`${len}x`);
     }
-    payHeader.push('isCoin', 'isCollector', 'CoinValues');
+    payHeader.push('isCoin', 'isCollector', 'CoinValues', 'isWild');
     const payRows = [payHeader];
+    const currentWilds = config.wildSymbols || [config.wildSymbol];
     for (const entry of gameData.paytable) {
         const row = [entry.symbol, entry.symbol];
         for (let len = 3; len <= config.numReels; len++) {
@@ -3139,8 +3442,8 @@ function exportToExcel() {
         }
         row.push(entry.isCoin ? 'TRUE' : 'FALSE');
         row.push(entry.isCollector ? 'TRUE' : 'FALSE');
-        // Coin values as JSON string
         row.push(entry.isCoin && entry.coinValues ? JSON.stringify(entry.coinValues) : '');
+        row.push(currentWilds.includes(entry.symbol) ? 'TRUE' : 'FALSE');
         payRows.push(row);
     }
     const paySheet = XLSX.utils.aoa_to_sheet(payRows);
@@ -3191,9 +3494,39 @@ function exportToExcel() {
     const ftSheet = XLSX.utils.aoa_to_sheet(ftRows);
     XLSX.utils.book_append_sheet(wb, ftSheet, 'Feature Triggers');
 
-    // Generate and download with incremented version number
-    const fileName = getNextVersionFileName(currentFileName);
-    XLSX.writeFile(wb, fileName);
+    // --- Lock & Spin ---
+    const lasRows = [['Lock & Spin'], [], ['Reel Set', 'Enabled', 'Trigger Symbol', 'Trigger Count', 'Lives', 'Pay Mode', 'Respin Weights (JSON)', 'Coin Values (JSON)']];
+    for (let setIdx = 0; setIdx < gameData.reelSets.length; setIdx++) {
+        const reelSet = gameData.reelSets[setIdx];
+        const las = reelSet.lockAndSpin;
+        if (las && las.enabled) {
+            lasRows.push([
+                reelSet.name,
+                true,
+                las.triggerSymbol || '',
+                las.triggerCount || 6,
+                las.lives || 3,
+                las.payMode || 'coins',
+                JSON.stringify(las.respinWeights || []),
+                JSON.stringify(las.coinValues || [])
+            ]);
+        } else {
+            lasRows.push([reelSet.name, false, '', '', '', '', '', '']);
+        }
+    }
+    const lasSheet = XLSX.utils.aoa_to_sheet(lasRows);
+    XLSX.utils.book_append_sheet(wb, lasSheet, 'Lock & Spin');
+
+    // Generate filename and prompt user
+    const suggestedName = getNextVersionFileName(currentFileName);
+    const fileName = prompt('Save as:', suggestedName);
+    if (!fileName) return; // cancelled
+    currentFileName = fileName;
+    XLSX.writeFile(wb, fileName.endsWith('.xlsx') ? fileName : fileName + '.xlsx');
+  } catch(e) {
+    console.error('Export error:', e);
+    alert('Export error: ' + e.message);
+  }
 }
 
 function getNextVersionFileName(name) {

@@ -795,6 +795,7 @@
                     <button class="data-sub-tab" data-subtab="subReelComp">Reel Composition</button>
                     <button class="data-sub-tab" data-subtab="subScatterInfo">Scatter / Free Games</button>
                     <button class="data-sub-tab" data-subtab="subWinDist">Win Distribution</button>
+                    <button class="data-sub-tab" data-subtab="subLockSpin">Lock & Spin</button>
                 </div>
                 <div class="data-sub-content" id="subSymbolBreakdown">
                     <div class="scrollable-table" id="symbolTable"></div>
@@ -811,6 +812,9 @@
                 <div class="data-sub-content" id="subWinDist" style="display:none;">
                     <div id="winDistTable"></div>
                 </div>
+                <div class="data-sub-content" id="subLockSpin" style="display:none;">
+                    <div id="lockSpinData"></div>
+                </div>
             </div>
         </div>
 
@@ -819,7 +823,9 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
     <script src="par-evaluator.js"></script>
+    <script src="par-export.js"></script>
     <script src="reel-editor.js"></script>
     <script>
         // CRITICAL: Override renderReelSetsPanel immediately to prevent old UI from showing
@@ -1142,7 +1148,7 @@
 
             const totalWeight = gameData.reelSets.reduce((sum, rs) => sum + rs.weight, 0);
 
-            let html = '<table style="width: 100%; border: 1px solid #333; border-radius: 8px;"><tr><th style="padding: 12px;">Name</th><th style="padding: 12px;">Weight</th><th style="padding: 12px;">Weight %</th><th style="padding: 12px;">Feature</th><th style="padding: 12px;">Actions</th></tr>';
+            let html = '<table style="width: 100%; border: 1px solid #333; border-radius: 8px;"><tr><th style="padding: 12px;">Name</th><th style="padding: 12px;">Weight</th><th style="padding: 12px;">Weight %</th><th style="padding: 12px;">Free Spins</th><th style="padding: 12px; color: #cc44ff;">Lock & Spin</th><th style="padding: 12px;">Actions</th></tr>';
 
             for (let i = 0; i < gameData.reelSets.length; i++) {
                 const set = gameData.reelSets[i];
@@ -1157,6 +1163,12 @@
                         <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                             <input type="checkbox" class="rs-feature-cb" data-set="${i}" ${hasFeature ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: #ff8c00; cursor: pointer;">
                             <span style="font-size: 0.85em; color: ${hasFeature ? '#ff8c00' : '#666'};">${hasFeature ? 'Yes' : 'No'}</span>
+                        </label>
+                    </td>
+                    <td style="padding: 12px;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="checkbox" class="rs-las-cb" data-set="${i}" ${set.lockAndSpin && set.lockAndSpin.enabled ? 'checked' : ''} style="width: 18px; height: 18px; accent-color: #cc44ff; cursor: pointer;">
+                            <span style="font-size: 0.85em; color: ${set.lockAndSpin && set.lockAndSpin.enabled ? '#cc44ff' : '#666'};">${set.lockAndSpin && set.lockAndSpin.enabled ? 'Yes' : 'No'}</span>
                         </label>
                     </td>
                     <td style="padding: 12px; display: flex; gap: 8px;">
@@ -1179,7 +1191,7 @@
                     const bands = ft.reelBands || [{ setIndex: 0, weight: 1 }];
 
                     html += `<tr style="background: #0a0a0a; border-bottom: 1px solid #222;">
-                        <td colspan="5" style="padding: 15px 20px;">
+                        <td colspan="6" style="padding: 15px 20px;">
                             <div style="border: 1px solid #333; border-radius: 8px; padding: 15px; background: #111;">
                                 <div class="ft-toggle-header" data-set="${i}" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;">
                                     <h4 style="color: #ff8c00; margin: 0; font-size: 0.9em;">🎰 Feature Trigger Settings</h4>
@@ -1342,10 +1354,83 @@
                     </tr>`;
                 }
 
+                // Lock & Spin section
+                const las = set.lockAndSpin || {};
+                if (las.enabled) {
+                html += '<tr style="background: #0a0a0a; border-bottom: 1px solid #222;"><td colspan="6" style="padding: 10px 12px;">';
+                    const lasCollapsed = las._collapsed || false;
+                    html += '<div style="margin-top: 10px; border: 1px solid #333; border-radius: 8px; padding: 12px; background: #111;">';
+                    html += '<div class="las-toggle-header" data-set="' + i + '" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;">';
+                    html += '<h4 style="color: #cc44ff; margin: 0; font-size: 0.9em;">Lock & Spin Settings</h4>';
+                    html += '<span style="color: #cc44ff; font-size: 1.2em;">' + (lasCollapsed ? '&#9656;' : '&#9662;') + '</span>';
+                    html += '</div>';
+
+                    if (!lasCollapsed) {
+                        const lasTriggerSym = las.triggerSymbol || 'COIN';
+                        const lasTriggerCount = las.triggerCount || 6;
+                        const lasLives = las.lives || 3;
+                        const lasPayMode = las.payMode || 'coins';
+                        const lasWeights = las.respinWeights || [{ symbol: 'COIN', weight: 20 }, { symbol: 'EMPTY', weight: 80 }];
+
+                        html += '<div style="margin-top: 12px; display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 12px;">';
+                        html += '<label style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 0.8em; color: #aaa;">Trigger Symbol</span>';
+                        html += '<select class="las-trigger-sym" data-set="' + i + '" style="background: #000; border: 1px solid #cc44ff; color: #fff; padding: 5px 8px; border-radius: 4px; font-size: 0.85em;">';
+                        for (const entry of gameData.paytable) {
+                            html += '<option value="' + entry.symbol + '"' + (entry.symbol === lasTriggerSym ? ' selected' : '') + '>' + entry.symbol + '</option>';
+                        }
+                        html += '</select></label>';
+                        html += '<label style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 0.8em; color: #aaa;">Trigger Count</span>';
+                        html += '<input type="number" class="las-trigger-count" data-set="' + i + '" value="' + lasTriggerCount + '" min="1" style="background: #000; border: 1px solid #cc44ff; color: #fff; padding: 5px 8px; border-radius: 4px; width: 55px; text-align: center; font-size: 0.85em;"></label>';
+                        html += '<label style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 0.8em; color: #aaa;">Lives</span>';
+                        html += '<input type="number" class="las-lives" data-set="' + i + '" value="' + lasLives + '" min="1" style="background: #000; border: 1px solid #cc44ff; color: #fff; padding: 5px 8px; border-radius: 4px; width: 55px; text-align: center; font-size: 0.85em;"></label>';
+                        html += '<label style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 0.8em; color: #aaa;">Pay Mode</span>';
+                        html += '<select class="las-pay-mode" data-set="' + i + '" style="background: #000; border: 1px solid #cc44ff; color: #fff; padding: 5px 8px; border-radius: 4px; font-size: 0.85em;">';
+                        html += '<option value="coins"' + (lasPayMode === 'coins' ? ' selected' : '') + '>Coin Values</option>';
+                        html += '<option value="lines"' + (lasPayMode === 'lines' ? ' selected' : '') + '>Line Wins</option>';
+                        html += '</select></label>';
+                        html += '</div>';
+
+                        // Respin weights
+                        html += '<div style="margin-top: 8px;"><span style="font-size: 0.8em; color: #aaa; display: block; margin-bottom: 6px;">Respin Weights (what lands on empty positions):</span>';
+                        for (let lw = 0; lw < lasWeights.length; lw++) {
+                            html += '<div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">';
+                            html += '<input type="text" class="las-wt-sym" data-set="' + i + '" data-lw="' + lw + '" value="' + lasWeights[lw].symbol + '" style="background: #000; border: 1px solid #333; color: #fff; padding: 3px 6px; border-radius: 4px; width: 70px; font-size: 0.8em;" placeholder="Symbol">';
+                            html += '<input type="number" class="las-wt-val" data-set="' + i + '" data-lw="' + lw + '" value="' + lasWeights[lw].weight + '" min="0" step="1" style="background: #000; border: 1px solid #333; color: #fff; padding: 3px 6px; border-radius: 4px; width: 50px; text-align: center; font-size: 0.8em;">';
+                            html += '<span style="font-size: 0.75em; color: #aaa;">wt</span>';
+                            if (lasWeights.length > 1) {
+                                html += '<button class="las-wt-rm" data-set="' + i + '" data-lw="' + lw + '" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 0.9em;">&#10005;</button>';
+                            }
+                            html += '</div>';
+                        }
+                        html += '<button class="las-wt-add" data-set="' + i + '" style="padding: 3px 8px; font-size: 0.75em; background: #222; color: #cc44ff; border: 1px solid #cc44ff; border-radius: 4px; cursor: pointer;">+ Add</button>';
+                        html += '</div>';
+
+                        // Coin values within Lock & Spin
+                        const lasCoinValues = las.coinValues || [{ value: 1, weight: 50 }, { value: 2, weight: 30 }, { value: 5, weight: 15 }, { value: 10, weight: 5 }];
+                        if (!las.coinValues) las.coinValues = lasCoinValues;
+                        html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333;">';
+                        html += '<span style="font-size: 0.8em; color: #aaa; display: block; margin-bottom: 6px;">Coin Values (what coins are worth during L&S):</span>';
+                        html += '<div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">';
+                        for (let cv = 0; cv < lasCoinValues.length; cv++) {
+                            html += '<span style="display: inline-flex; align-items: center; gap: 3px; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 2px 5px;">';
+                            html += '<input type="number" class="las-cv-val" data-set="' + i + '" data-cv="' + cv + '" value="' + lasCoinValues[cv].value + '" min="0" step="0.5" style="background: #000; border: 1px solid #cc44ff; color: #fff; padding: 2px 4px; border-radius: 3px; width: 40px; text-align: center; font-size: 0.85em;">x ';
+                            html += '<input type="number" class="las-cv-wt" data-set="' + i + '" data-cv="' + cv + '" value="' + lasCoinValues[cv].weight + '" min="0" step="1" style="background: #000; border: 1px solid #333; color: #aaa; padding: 2px 4px; border-radius: 3px; width: 35px; text-align: center; font-size: 0.85em;">%';
+                            if (lasCoinValues.length > 1) {
+                                html += '<button class="las-cv-rm" data-set="' + i + '" data-cv="' + cv + '" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 0.8em;">&#10005;</button>';
+                            }
+                            html += '</span>';
+                        }
+                        html += '<button class="las-cv-add" data-set="' + i + '" style="background: #222; border: 1px solid #cc44ff; color: #cc44ff; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75em;">+</button>';
+                        html += '</div></div>';
+                    }
+                    html += '</div>';
+                html += '</td></tr>';
+                }
+
                 // Modifiers section for this reel set
                 const modifiers = set.modifiers || [];
                 html += `<tr style="background: #0a0a0a; border-bottom: 1px solid #333;">
-                    <td colspan="5" style="padding: 10px 12px;">
+                    <td colspan="6" style="padding: 10px 12px;">
                         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                             <span style="font-size: 0.85em; color: #aaa;">Modifiers:</span>`;
 
@@ -1757,6 +1842,122 @@
                     const idx = parseInt(e.target.dataset.set);
                     if (!gameData.reelSets[idx].featureTrigger.collectBands) gameData.reelSets[idx].featureTrigger.collectBands = [];
                     gameData.reelSets[idx].featureTrigger.collectBands.push({ setIndex: 0, weight: 1 });
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // Lock & Spin bindings (from table row checkbox)
+            container.querySelectorAll('.rs-las-cb').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    if (!gameData.reelSets[idx].lockAndSpin) gameData.reelSets[idx].lockAndSpin = {};
+                    gameData.reelSets[idx].lockAndSpin.enabled = e.target.checked;
+                    if (e.target.checked && !gameData.reelSets[idx].lockAndSpin.respinWeights) {
+                        gameData.reelSets[idx].lockAndSpin.triggerSymbol = 'COIN';
+                        gameData.reelSets[idx].lockAndSpin.triggerCount = 6;
+                        gameData.reelSets[idx].lockAndSpin.lives = 3;
+                        gameData.reelSets[idx].lockAndSpin.payMode = 'coins';
+                        gameData.reelSets[idx].lockAndSpin.respinWeights = [{ symbol: 'COIN', weight: 20 }, { symbol: 'EMPTY', weight: 80 }];
+                        gameData.reelSets[idx].lockAndSpin.coinValues = [{ value: 1, weight: 50 }, { value: 2, weight: 30 }, { value: 5, weight: 15 }, { value: 10, weight: 5 }];
+                    }
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-toggle-header').forEach(header => {
+                header.addEventListener('click', function() {
+                    const idx = parseInt(this.getAttribute('data-set'));
+                    gameData.reelSets[idx].lockAndSpin._collapsed = !gameData.reelSets[idx].lockAndSpin._collapsed;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-trigger-sym').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].lockAndSpin.triggerSymbol = e.target.value;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-trigger-count').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].lockAndSpin.triggerCount = parseInt(e.target.value) || 6;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-lives').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].lockAndSpin.lives = parseInt(e.target.value) || 3;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-pay-mode').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].lockAndSpin.payMode = e.target.value;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-wt-sym').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const lwIdx = parseInt(e.target.dataset.lw);
+                    gameData.reelSets[idx].lockAndSpin.respinWeights[lwIdx].symbol = e.target.value.trim();
+                });
+            });
+            container.querySelectorAll('.las-wt-val').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const lwIdx = parseInt(e.target.dataset.lw);
+                    gameData.reelSets[idx].lockAndSpin.respinWeights[lwIdx].weight = parseFloat(e.target.value) || 0;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-wt-rm').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const lwIdx = parseInt(e.target.dataset.lw);
+                    gameData.reelSets[idx].lockAndSpin.respinWeights.splice(lwIdx, 1);
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-wt-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].lockAndSpin.respinWeights.push({ symbol: 'EMPTY', weight: 50 });
+                    renderCustomReelSetsPanel();
+                });
+            });
+
+            // L&S coin value bindings
+            container.querySelectorAll('.las-cv-val').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const cvIdx = parseInt(e.target.dataset.cv);
+                    gameData.reelSets[idx].lockAndSpin.coinValues[cvIdx].value = parseFloat(e.target.value) || 0;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-cv-wt').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const cvIdx = parseInt(e.target.dataset.cv);
+                    gameData.reelSets[idx].lockAndSpin.coinValues[cvIdx].weight = parseFloat(e.target.value) || 0;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-cv-rm').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const cvIdx = parseInt(e.target.dataset.cv);
+                    gameData.reelSets[idx].lockAndSpin.coinValues.splice(cvIdx, 1);
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-cv-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].lockAndSpin.coinValues.push({ value: 1, weight: 10 });
                     renderCustomReelSetsPanel();
                 });
             });
