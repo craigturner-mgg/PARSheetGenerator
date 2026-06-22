@@ -87,8 +87,10 @@ async function exportToExcelJS() {
             const rs = gameData.reelSets[si];
             if (!rs.reelStrips || rs.reelStrips.length === 0 || rs.reelStrips[0].length === 0) continue;
 
-            const setName = rs.name.substring(0, 28);
-            const ws = wb.addWorksheet(setName);
+            const setName = rs.name.substring(0, 20);
+            const sheetSuffix = gameData.reelSets.length > 1 ? ' (' + setName + ')' : '';
+            const wsName = ('Reel Strips' + sheetSuffix).substring(0, 31);
+            const ws = wb.addWorksheet(wsName);
 
             const rl = rs.reelStrips.map(r => r.length);
             const maxLen = Math.max(...rl);
@@ -102,10 +104,7 @@ async function exportToExcelJS() {
             cols.push({ width: 8 }); // total
             ws.columns = cols;
 
-            // --- REEL STRIPS ---
-            const stripTitle = ws.addRow(['Reel Strips']);
-            stripTitle.font = { bold: true, size: 12, color: { argb: 'FFFF8C00' } };
-
+            // --- REEL STRIPS (header on row 1 for importer compatibility) ---
             const stripHeader = ['Stop'];
             for (let r = 0; r < config.numReels; r++) stripHeader.push('Reel ' + (r + 1));
             const sh = ws.addRow(stripHeader);
@@ -203,27 +202,27 @@ async function exportToExcelJS() {
 
         // === PAYTABLE SHEET ===
         const payWs = wb.addWorksheet('Paytable');
-        const payHeader = ['Symbol'];
+        const payHeader = ['Symbol', 'SymbolID'];
         for (let len = 3; len <= config.numReels; len++) payHeader.push(len + 'x');
-        payHeader.push('Wild', 'Coin', 'Collector', 'Coin Values');
+        payHeader.push('isCoin', 'isCollector', 'CoinValues', 'isWild');
         const ph = payWs.addRow(payHeader);
         styleHeader(ph);
 
         const currentWilds = config.wildSymbols || [];
         for (let i = 0; i < gameData.paytable.length; i++) {
             const entry = gameData.paytable[i];
-            const row = [entry.symbol];
+            const row = [entry.symbol, entry.symbol];
             for (let len = 3; len <= config.numReels; len++) {
                 row.push(entry.pays[len] !== undefined ? entry.pays[len] : 'N/A');
             }
-            row.push(currentWilds.includes(entry.symbol) ? 'TRUE' : 'FALSE');
             row.push(entry.isCoin ? 'TRUE' : 'FALSE');
             row.push(entry.isCollector ? 'TRUE' : 'FALSE');
             row.push(entry.isCoin && entry.coinValues ? JSON.stringify(entry.coinValues) : '');
+            row.push(currentWilds.includes(entry.symbol) ? 'TRUE' : 'FALSE');
             const dr = payWs.addRow(row);
             styleDataRow(dr, i % 2 === 1);
         }
-        payWs.columns = [{ width: 12 }, ...Array(config.numReels - 2).fill({ width: 10 }), { width: 8 }, { width: 8 }, { width: 10 }, { width: 40 }];
+        payWs.columns = [{ width: 12 }, { width: 12 }, ...Array(config.numReels - 2).fill({ width: 10 }), { width: 8 }, { width: 10 }, { width: 40 }, { width: 8 }];
 
         // === WIN LINES SHEET ===
         const wlWs = wb.addWorksheet('Win Lines');
