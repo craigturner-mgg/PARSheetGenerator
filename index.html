@@ -209,8 +209,9 @@
         }
 
         .scrollable-table {
-            max-height: 500px;
+            max-height: 70vh;
             overflow-y: auto;
+            overflow-x: auto;
         }
 
         .hit-freq {
@@ -917,7 +918,6 @@
         }
 
         // PAR init
-        console.log('PAR init: starting...');
 
         // ============ SPLASH SCREEN ============
         const splashScreen = document.getElementById('splashScreen');
@@ -934,13 +934,10 @@
         });
 
         splashFileInput.addEventListener('change', (e) => {
-            console.log('File selected:', e.target.files[0]);
             if (e.target.files[0]) {
                 splashScreen.style.display = 'none';
                 mainApp.style.display = 'block';
-                console.log('Calling processFile...');
                 processFile(e.target.files[0]);
-                console.log('processFile called');
             }
         });
 
