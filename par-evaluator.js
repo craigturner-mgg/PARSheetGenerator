@@ -262,6 +262,7 @@ function parseExportedWorkbook(workbook) {
     const collColIdx = payHeaderRow.indexOf('isCollector');
     const coinValColIdx = payHeaderRow.indexOf('CoinValues');
     const wildColIdx = payHeaderRow.indexOf('isWild');
+    const collMultColIdx = payHeaderRow.indexOf('CollectorMultipliers');
     const importedWilds = [];
 
     for (let i = 1; i < payData.length; i++) {
@@ -299,6 +300,13 @@ function parseExportedWorkbook(workbook) {
             if (String(row[wildColIdx]).toUpperCase() === 'TRUE') {
                 importedWilds.push(entry.symbol);
             }
+        }
+
+        // Read collector multipliers
+        if (collMultColIdx >= 0 && row[collMultColIdx]) {
+            try {
+                entry.collectorMultipliers = JSON.parse(row[collMultColIdx]);
+            } catch(e) {}
         }
 
         gameData.paytable.push(entry);
@@ -507,6 +515,7 @@ function parseExportedWorkbook(workbook) {
                 };
                 try { matchSet.lockAndSpin.respinWeights = JSON.parse(row[6]); } catch(e) {}
                 try { matchSet.lockAndSpin.coinValues = JSON.parse(row[7]); } catch(e) {}
+                try { matchSet.lockAndSpin.collectorMultipliers = JSON.parse(row[8]); } catch(e) {}
                 if (!matchSet.lockAndSpin.respinWeights || matchSet.lockAndSpin.respinWeights.length === 0) {
                     matchSet.lockAndSpin.respinWeights = [{ symbol: 'COIN', weight: 20 }, { symbol: 'EMPTY', weight: 80 }];
                 }
@@ -1228,60 +1237,73 @@ function calculateLockAndSpinRtp(config, totalWeight) {
 
         if (pTrigger <= 0) continue;
 
-        // Expected total coins at end of feature — use mini simulation for accuracy
+        // Expected total payout of the L&S feature — full simulation for accuracy
         const simCount = 10000;
-        let simTotalCoins = 0;
+        let simTotalPayout = 0;
         const totalRespinWeight = respinWeights.reduce((s, w) => s + w.weight, 0);
-        const pCoinOnRespin = respinWeights.filter(w => w.symbol !== 'EMPTY').reduce((s, w) => s + w.weight, 0) / totalRespinWeight;
+        const pCoinSim = respinWeights.filter(w => w.symbol !== 'EMPTY' && !gameData.paytable.filter(e => e.isCollector).map(e => e.symbol).includes(w.symbol)).reduce((s, w) => s + w.weight, 0) / totalRespinWeight;
+        const pCollSim = respinWeights.filter(w => gameData.paytable.filter(e => e.isCollector).map(e => e.symbol).includes(w.symbol)).reduce((s, w) => s + w.weight, 0) / totalRespinWeight;
+
+        // Get L&S coin values
+        const lasCoinVals = las.coinValues || [{ value: 1, weight: 50 }];
+        const lasCoinTotalWt = lasCoinVals.reduce((s, cv) => s + cv.weight, 0);
+        function sampleLasCoin() {
+            const r = Math.random() * lasCoinTotalWt;
+            let c = 0;
+            for (const cv of lasCoinVals) { c += cv.weight; if (r <= c) return cv.value; }
+            return lasCoinVals[lasCoinVals.length - 1].value;
+        }
+
+        // Get collector multiplier
+        const lasCollMult = las.collectorMultiplier || 1;
+        let lasCollMults = [{ multiplier: lasCollMult, weight: 100 }];
+        if (las.collectorMultipliers && las.collectorMultipliers.length > 0) {
+            lasCollMults = las.collectorMultipliers;
+        } else {
+            const ce = gameData.paytable.find(e => e.isCollector && e.collectorMultipliers && e.collectorMultipliers.length > 0);
+            if (ce) lasCollMults = ce.collectorMultipliers;
+        }
+        const lasCollMultTotalWt = lasCollMults.reduce((s, cm) => s + cm.weight, 0);
+        function sampleLasCollMult() {
+            const r = Math.random() * lasCollMultTotalWt;
+            let c = 0;
+            for (const cm of lasCollMults) { c += cm.weight; if (r <= c) return cm.multiplier; }
+            return lasCollMults[lasCollMults.length - 1].multiplier;
+        }
 
         for (let sim = 0; sim < simCount; sim++) {
             let filled = triggerCount;
+            let coinSum = 0;
+            let totalVal = 0;
+            for (let c = 0; c < triggerCount; c++) {
+                const v = sampleLasCoin();
+                coinSum += v;
+                totalVal += v;
+            }
             let livesLeft = lives;
             while (livesLeft > 0 && filled < totalPositions) {
                 const empty = totalPositions - filled;
                 let landed = false;
                 for (let ep = 0; ep < empty; ep++) {
-                    if (Math.random() < pCoinOnRespin) {
+                    const rand = Math.random();
+                    if (rand < pCoinSim) {
+                        const v = sampleLasCoin();
+                        coinSum += v;
+                        totalVal += v;
+                        filled++;
+                        landed = true;
+                    } else if (rand < pCoinSim + pCollSim) {
+                        const mult = sampleLasCollMult();
+                        totalVal += coinSum * mult;
                         filled++;
                         landed = true;
                     }
                 }
                 if (landed) { livesLeft = lives; } else { livesLeft--; }
             }
-            simTotalCoins += filled;
+            simTotalPayout += totalVal;
         }
-        const expectedTotalCoins = simTotalCoins / simCount;
-
-        // Expected payout value
-        let expectedPayout = 0;
-        if (payMode === 'coins') {
-            // Get expected value per coin - use L&S custom coin values if defined
-            let expectedCoinVal = 1;
-            if (las.coinValues && las.coinValues.length > 0) {
-                // Use Lock & Spin specific coin values
-                const totalWt = las.coinValues.reduce((s, cv) => s + cv.weight, 0);
-                expectedCoinVal = totalWt > 0 ? las.coinValues.reduce((s, cv) => s + (cv.value * cv.weight / totalWt), 0) : 1;
-            } else {
-                // Fall back to paytable coin values
-                const coinEntry = gameData.paytable.find(e => e.symbol === triggerSym);
-                if (coinEntry && coinEntry.isCoin && coinEntry.coinValues) {
-                    let coinVals = coinEntry.coinValues;
-                    if (reelSet.modifiers) {
-                        const cvMod = reelSet.modifiers.find(m => m.type === 'coinValues');
-                        if (cvMod && cvMod.overrides && cvMod.overrides[triggerSym]) {
-                            coinVals = cvMod.overrides[triggerSym];
-                        }
-                    }
-                    const totalWt = coinVals.reduce((s, cv) => s + cv.weight, 0);
-                    expectedCoinVal = totalWt > 0 ? coinVals.reduce((s, cv) => s + (cv.value * cv.weight / totalWt), 0) : 1;
-                }
-            }
-            expectedPayout = expectedTotalCoins * expectedCoinVal;
-        } else {
-            // Lines mode: approximate as line wins RTP * fill percentage
-            const fillPct = expectedTotalCoins / totalPositions;
-            expectedPayout = fillPct * 10; // rough approximation
-        }
+        const expectedPayout = simTotalPayout / simCount;
 
         // RTP contribution (as percentage)
         const contribution = pTrigger * expectedPayout * weightFraction * 100;
@@ -2354,6 +2376,25 @@ function renderPaytableEditor() {
             html += '<button class="pay-cv-add" data-idx="' + i + '" style="background: #222; border: 1px solid #00cc88; color: #00cc88; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">+</button>';
             html += '</div></td></tr>';
         }
+
+        // Collector multipliers sub-row
+        if (entry.isCollector) {
+            if (!entry.collectorMultipliers) entry.collectorMultipliers = [{ multiplier: 2, weight: 40 }, { multiplier: 3, weight: 40 }, { multiplier: 5, weight: 20 }];
+            html += '<tr style="background: #0a0a0a;"><td colspan="' + (5 + config.numReels - 2) + '" style="padding: 6px 10px 6px 30px; font-size: 0.8em;">';
+            html += '<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">';
+            html += '<span style="color: #cc8800;">Multipliers:</span>';
+            for (let cm = 0; cm < entry.collectorMultipliers.length; cm++) {
+                html += '<span style="display: inline-flex; align-items: center; gap: 3px; background: #111; border: 1px solid #333; border-radius: 4px; padding: 2px 5px;">';
+                html += '<input type="number" class="pay-cm-val" data-idx="' + i + '" data-cm="' + cm + '" value="' + entry.collectorMultipliers[cm].multiplier + '" min="1" step="1" style="background: #000; border: 1px solid #cc8800; color: #fff; padding: 2px 4px; border-radius: 3px; width: 40px; text-align: center; font-size: 0.85em;">x ';
+                html += '<input type="number" class="pay-cm-wt" data-idx="' + i + '" data-cm="' + cm + '" value="' + entry.collectorMultipliers[cm].weight + '" min="0" step="1" style="background: #000; border: 1px solid #333; color: #aaa; padding: 2px 4px; border-radius: 3px; width: 35px; text-align: center; font-size: 0.85em;">%';
+                if (entry.collectorMultipliers.length > 1) {
+                    html += '<button class="pay-cm-rm" data-idx="' + i + '" data-cm="' + cm + '" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 0.8em;">&#10005;</button>';
+                }
+                html += '</span>';
+            }
+            html += '<button class="pay-cm-add" data-idx="' + i + '" style="background: #222; border: 1px solid #cc8800; color: #cc8800; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">+</button>';
+            html += '</div></td></tr>';
+        }
     }
 
     html += '</table>';
@@ -2449,6 +2490,42 @@ function renderPaytableEditor() {
         });
     });
 
+    // Collector multiplier bindings
+    container.querySelectorAll('.pay-cm-val').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            const cmIdx = parseInt(e.target.dataset.cm);
+            gameData.paytable[idx].collectorMultipliers[cmIdx].multiplier = parseInt(e.target.value) || 1;
+            runEvaluation();
+        });
+    });
+    container.querySelectorAll('.pay-cm-wt').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            const cmIdx = parseInt(e.target.dataset.cm);
+            gameData.paytable[idx].collectorMultipliers[cmIdx].weight = parseFloat(e.target.value) || 0;
+            runEvaluation();
+        });
+    });
+    container.querySelectorAll('.pay-cm-rm').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            const cmIdx = parseInt(e.target.dataset.cm);
+            gameData.paytable[idx].collectorMultipliers.splice(cmIdx, 1);
+            renderPaytableEditor();
+            runEvaluation();
+        });
+    });
+    container.querySelectorAll('.pay-cm-add').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(e.target.dataset.idx);
+            if (!gameData.paytable[idx].collectorMultipliers) gameData.paytable[idx].collectorMultipliers = [];
+            gameData.paytable[idx].collectorMultipliers.push({ multiplier: 2, weight: 20 });
+            renderPaytableEditor();
+            runEvaluation();
+        });
+    });
+
     // Bind radio selection
     container.querySelectorAll('input[type="radio"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
@@ -2535,7 +2612,7 @@ function simulateLockAndSpin() {
     const respinWeights = las.respinWeights || [{ symbol: 'COIN', weight: 20 }, { symbol: 'EMPTY', weight: 80 }];
     const totalRespinWeight = respinWeights.reduce((s, w) => s + w.weight, 0);
     const triggerCount = las.triggerCount || 6;
-    const collectorMultiplier = las.collectorMultiplier || 2;
+    const collectorMultiplier = las.collectorMultiplier || 1;
 
     // Get collector multiplier weights (L&S specific first, then paytable fallback)
     let collectorMultipliers = [{ multiplier: collectorMultiplier, weight: 100 }];
@@ -2590,9 +2667,12 @@ function simulateLockAndSpin() {
         for (let sim = 0; sim < numSims; sim++) {
             // Start with triggerCount coins locked, each with a sampled value
             let filledPositions = triggerCount;
-            let totalValue = 0;
+            let coinSum = 0;  // sum of base coin values only
+            let totalValue = 0;  // total payout including collector bonuses
             for (let c = 0; c < triggerCount; c++) {
-                totalValue += sampleCoinVal();
+                const cv = sampleCoinVal();
+                coinSum += cv;
+                totalValue += cv;
             }
 
             // Respin loop
@@ -2604,13 +2684,15 @@ function simulateLockAndSpin() {
                     const rand = Math.random();
                     if (rand < pCoinOnRespin) {
                         // Coin lands
+                        const cv = sampleCoinVal();
+                        coinSum += cv;
+                        totalValue += cv;
                         filledPositions++;
-                        totalValue += sampleCoinVal();
                         landed = true;
                     } else if (rand < pCoinOnRespin + pCollectorOnRespin) {
-                        // Collector lands — collects all current coins * random multiplier, becomes a coin
+                        // Collector lands — collects sum of all COIN values (not previous collectors) * multiplier
                         const mult = sampleCollectorMult();
-                        const collectedValue = totalValue * mult;
+                        const collectedValue = coinSum * mult;
                         totalValue += collectedValue;
                         filledPositions++;
                         landed = true;

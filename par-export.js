@@ -41,6 +41,9 @@ function styleDataRow(row, alt) {
 
 async function exportToExcelJS() {
     try {
+        // Sync current reel strips to active reel set before export
+        if (typeof syncActiveReelSet === 'function') syncActiveReelSet();
+
         const config = getConfig();
         const wb = new ExcelJS.Workbook();
         wb.creator = 'Mad Goose Games PAR Generator';
@@ -204,7 +207,7 @@ async function exportToExcelJS() {
         const payWs = wb.addWorksheet('Paytable');
         const payHeader = ['Symbol', 'SymbolID'];
         for (let len = 3; len <= config.numReels; len++) payHeader.push(len + 'x');
-        payHeader.push('isCoin', 'isCollector', 'CoinValues', 'isWild');
+        payHeader.push('isCoin', 'isCollector', 'CoinValues', 'isWild', 'CollectorMultipliers');
         const ph = payWs.addRow(payHeader);
         styleHeader(ph);
 
@@ -219,6 +222,7 @@ async function exportToExcelJS() {
             row.push(entry.isCollector ? 'TRUE' : 'FALSE');
             row.push(entry.isCoin && entry.coinValues ? JSON.stringify(entry.coinValues) : '');
             row.push(currentWilds.includes(entry.symbol) ? 'TRUE' : 'FALSE');
+            row.push(entry.isCollector && entry.collectorMultipliers ? JSON.stringify(entry.collectorMultipliers) : '');
             const dr = payWs.addRow(row);
             styleDataRow(dr, i % 2 === 1);
         }
@@ -259,16 +263,16 @@ async function exportToExcelJS() {
 
         // === LOCK & SPIN SHEET ===
         const lasWs = wb.addWorksheet('Lock & Spin');
-        const lasH = lasWs.addRow(['Reel Set', 'Enabled', 'Trigger Symbol', 'Trigger Count', 'Lives', 'Pay Mode', 'Respin Weights', 'Coin Values']);
+        const lasH = lasWs.addRow(['Reel Set', 'Enabled', 'Trigger Symbol', 'Trigger Count', 'Lives', 'Pay Mode', 'Respin Weights', 'Coin Values', 'Collector Multipliers']);
         styleHeader(lasH);
         for (let si = 0; si < gameData.reelSets.length; si++) {
             const rs = gameData.reelSets[si];
             const las = rs.lockAndSpin;
             if (las && las.enabled) {
-                const dr = lasWs.addRow([rs.name, true, las.triggerSymbol || '', las.triggerCount || 6, las.lives || 3, las.payMode || 'coins', JSON.stringify(las.respinWeights || []), JSON.stringify(las.coinValues || [])]);
+                const dr = lasWs.addRow([rs.name, true, las.triggerSymbol || '', las.triggerCount || 6, las.lives || 3, las.payMode || 'coins', JSON.stringify(las.respinWeights || []), JSON.stringify(las.coinValues || []), JSON.stringify(las.collectorMultipliers || [])]);
                 styleDataRow(dr, si % 2 === 1);
             } else {
-                const dr = lasWs.addRow([rs.name, false, '', '', '', '', '', '']);
+                const dr = lasWs.addRow([rs.name, false, '', '', '', '', '', '', '']);
                 styleDataRow(dr, si % 2 === 1);
             }
         }

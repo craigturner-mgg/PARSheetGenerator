@@ -1336,7 +1336,7 @@
                         html += '<option value="coins"' + (lasPayMode === 'coins' ? ' selected' : '') + '>Coin Values</option>';
                         html += '<option value="lines"' + (lasPayMode === 'lines' ? ' selected' : '') + '>Line Wins</option>';
                         html += '</select></label>';
-                        const lasCollectorMult = las.collectorMultiplier || 2;
+                        const lasCollectorMult = las.collectorMultiplier || 1;
                         html += '<label style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 0.8em; color: #aaa;">Collector Multiplier</span>';
                         html += '<input type="number" class="las-coll-mult" data-set="' + i + '" value="' + lasCollectorMult + '" min="1" step="1" style="background: #000; border: 1px solid #cc44ff; color: #fff; padding: 5px 8px; border-radius: 4px; width: 55px; text-align: center; font-size: 0.85em;"></label>';
                         html += '</div>';
