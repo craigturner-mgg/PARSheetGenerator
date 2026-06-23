@@ -237,17 +237,22 @@ async function exportToExcelJS() {
 
         // === FEATURE TRIGGERS SHEET ===
         const ftWs = wb.addWorksheet('Feature Triggers');
-        const ftH = ftWs.addRow(['Reel Set', 'Enabled', 'Trigger Symbol', 'Trigger Count', 'Num Spins', 'Target Set Index', 'Global Multiplier']);
+        const ftH = ftWs.addRow(['Reel Set', 'Enabled', 'Trigger Symbol', 'Trigger Count', 'Num Spins', 'Target Set Index', 'Global Multiplier', 'Tiers (JSON)', 'Retrigger Enabled', 'Retrigger Scatters', 'Retrigger Spins']);
         styleHeader(ftH);
         for (let si = 0; si < gameData.reelSets.length; si++) {
             const rs = gameData.reelSets[si];
             const ft = rs.featureTrigger;
             if (ft && ft.enabled) {
                 const targetIdx = (ft.tiers && ft.tiers[0] && ft.tiers[0].bands && ft.tiers[0].bands[0]) ? ft.tiers[0].bands[0].setIndex : (ft.targetSetIndex || 0);
-                const dr = ftWs.addRow([rs.name, true, ft.triggerSymbol || '', ft.triggerCount || 3, ft.numSpins || 10, targetIdx, ft.globalMultiplier || 1]);
+                const tiersJson = ft.tiers ? JSON.stringify(ft.tiers) : '';
+                const dr = ftWs.addRow([
+                    rs.name, true, ft.triggerSymbol || '', ft.triggerCount || 3, ft.numSpins || 10,
+                    targetIdx, ft.globalMultiplier || 1, tiersJson,
+                    ft.retriggerEnabled || false, ft.retriggerScatters || 3, ft.retriggerSpins || 5
+                ]);
                 styleDataRow(dr, si % 2 === 1);
             } else {
-                const dr = ftWs.addRow([rs.name, false, '', '', '', '', '']);
+                const dr = ftWs.addRow([rs.name, false, '', '', '', '', '', '', '', '', '']);
                 styleDataRow(dr, si % 2 === 1);
             }
         }

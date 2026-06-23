@@ -532,7 +532,7 @@
             <button id="splashNewBtn" onclick="document.getElementById('splashScreen').style.display='none'; document.getElementById('wizardScreen').style.display='block';" style="background: #ff8c00; color: #ffffff; padding: 14px 30px; font-size: 1.1em;">NEW</button>
             <label style="background: #ff8c00; color: #ffffff; padding: 14px 30px; font-size: 1.1em; border-radius: 8px; font-weight: bold; cursor: pointer; display: inline-block;">
                 UPLOAD
-                <input type="file" id="splashFileInput" accept=".xlsx,.xls" style="display: none;" onchange="if(this.files[0]){document.getElementById('splashScreen').style.display='none';document.getElementById('mainApp').style.display='block';processFile(this.files[0]);}">
+                <input type="file" id="splashFileInput" accept=".xlsx,.xls" style="display: none;" onchange="if(this.files[0]){document.getElementById('splashScreen').style.display='none';document.getElementById('mainApp').style.display='block';if(window._resetConfigDetected)window._resetConfigDetected();processFile(this.files[0]);}">
             </label>
         </div>
     </div>
@@ -828,33 +828,15 @@
     <script src="par-export.js"></script>
     <script src="reel-editor.js"></script>
     <script>
-        // CRITICAL: Override renderReelSetsPanel immediately to prevent old UI from showing
+        // Override runEvaluation after par-evaluator.js is loaded
         (function() {
-            var _origRenderReelSetsPanel = window.renderReelSetsPanel;
-            window.renderReelSetsPanel = function() {
-                var container = document.getElementById('reelSetsPanel');
-                if (!container) return;
-                if (typeof window._renderCustomReelSetsPanel === 'function') {
-                    try { window._renderCustomReelSetsPanel(); } catch(e) { console.error('Reel panel error:', e); }
-                } else {
-                    // Not ready yet — schedule it for after main script loads
-                    setTimeout(function() {
-                        if (typeof window._renderCustomReelSetsPanel === 'function') {
-                            try { window._renderCustomReelSetsPanel(); } catch(e) { console.error('Reel panel error (deferred):', e); }
-                        }
-                    }, 50);
-                }
-            };
-
             var _origRunEvaluation = window.runEvaluation;
+            window._resetConfigDetected = function() { _configDetected = false; };
+            var _configDetected = false;
             window.runEvaluation = function() {
-                // Auto-detect config from loaded data
-                if (typeof gameData !== 'undefined') {
+                if (!_configDetected && typeof gameData !== 'undefined') {
                     if (gameData.reelStrips && gameData.reelStrips.length > 0) {
-                        var detectedReels = gameData.reelStrips.length;
-                        if (parseInt(document.getElementById('numReels').value) !== detectedReels) {
-                            document.getElementById('numReels').value = detectedReels;
-                        }
+                        document.getElementById('numReels').value = gameData.reelStrips.length;
                     }
                     if (gameData.winLines && gameData.winLines.length > 0) {
                         document.getElementById('numLines').value = gameData.winLines.length;
@@ -866,92 +848,58 @@
                         }
                         document.getElementById('numRows').value = maxRow;
                     }
-
-                    // Sync custom feature trigger UI data into engine format
-                    if (gameData.reelSets) {
-                        for (var s = 0; s < gameData.reelSets.length; s++) {
-                            var ft = gameData.reelSets[s].featureTrigger;
-                            if (ft && ft.enabled) {
-                                // Set scatter symbol for the engine
-                                if (ft.triggerSymbol) {
-                                    document.getElementById('scatterSymbol').value = ft.triggerSymbol;
-                                }
-                                // Build awards array from our UI data
-                                var targetIdx = 0;
-                                if (ft.reelBands && ft.reelBands.length > 0) {
-                                    targetIdx = ft.reelBands[0].setIndex || 0;
-                                }
-                                var tiers = ft.tiers;
-                                if (!tiers) {
-                                    tiers = [{ count: ft.triggerCount || 3, spins: ft.numSpins || 10, bands: ft.reelBands || [{ setIndex: 0, weight: 1 }] }];
-                                    ft.tiers = tiers;
-                                }
-                                ft.awards = [];
-                                for (var ti = 0; ti < tiers.length; ti++) {
-                                    var tierTarget = (tiers[ti].bands && tiers[ti].bands.length > 0) ? tiers[ti].bands[0].setIndex : targetIdx;
-                                    ft.awards.push({
-                                        scatterCount: tiers[ti].count,
-                                        spins: tiers[ti].spins,
-                                        targetSetIndex: tierTarget
-                                    });
-                                }
-                                ft.triggerCount = Math.min.apply(null, tiers.map(function(t) { return t.count; }));
-                                ft.numSpins = tiers[0].spins;
-                                ft.targetSetIndex = (tiers[0].bands && tiers[0].bands.length > 0) ? tiers[0].bands[0].setIndex : targetIdx;
-                                ft.globalMultiplier = ft.globalMultiplier || 1;
-                                ft.retrigger = !!ft.retriggerEnabled;
-
-                                // If retrigger is enabled, ensure the target set has a feature trigger
-                                // that awards additional spins (pointing to itself or the retrigger set)
-                                if (ft.retriggerEnabled) {
-                                    var rtTargetIdx = ft.retriggerSetIndex !== undefined ? ft.retriggerSetIndex : targetIdx;
-                                    var targetSet = gameData.reelSets[targetIdx];
-                                    if (targetSet) {
-                                        if (!targetSet.featureTrigger) {
-                                            targetSet.featureTrigger = { enabled: false };
-                                        }
-                                        // Set up retrigger awards on the target set
-                                        targetSet.featureTrigger.enabled = true;
-                                        targetSet.featureTrigger.retrigger = true;
-                                        if (!targetSet.featureTrigger.awards) {
-                                            targetSet.featureTrigger.awards = [];
-                                        }
-                                        // Add retrigger award if not already present
-                                        var rtAward = {
-                                            scatterCount: ft.retriggerScatters || 3,
-                                            spins: ft.retriggerSpins || 5,
-                                            targetSetIndex: rtTargetIdx
-                                        };
-                                        // Replace any existing retrigger award
-                                        targetSet.featureTrigger.awards = [rtAward];
-                                        targetSet.featureTrigger.targetSetIndex = rtTargetIdx;
-                                        targetSet.featureTrigger.globalMultiplier = targetSet.featureTrigger.globalMultiplier || 1;
-                                    }
-                                }
-                                // If collect retrigger is enabled, calculate expected additional spins
-                                // based on probability of collecting X symbols in N spins
-                                if (ft.collectEnabled && ft.collectSymbol && ft.collectCount) {
-                                    ft.collectRetriggerData = {
-                                        symbol: ft.collectSymbol,
-                                        count: ft.collectCount,
-                                        spins: ft.collectSpins || 5,
-                                        setIndex: ft.collectSetIndex !== undefined ? ft.collectSetIndex : 0
-                                    };
-                                }
+                    _configDetected = true;
+                }
+                // Sync feature trigger data
+                if (typeof gameData !== 'undefined' && gameData.reelSets) {
+                    // Set scatter symbol from the first enabled feature trigger
+                    var scatterSet = false;
+                    for (var s = 0; s < gameData.reelSets.length; s++) {
+                        var ft = gameData.reelSets[s].featureTrigger;
+                        if (ft && ft.enabled && ft.triggerSymbol && !scatterSet) {
+                            document.getElementById('scatterSymbol').value = ft.triggerSymbol;
+                            scatterSet = true;
+                        }
+                        if (ft && ft.enabled) {
+                            var targetIdx = (ft.reelBands && ft.reelBands.length > 0) ? ft.reelBands[0].setIndex || 0 : 0;
+                            var tiers = ft.tiers;
+                            if (!tiers) {
+                                tiers = [{ count: ft.triggerCount || 3, spins: ft.numSpins || 10, bands: ft.reelBands || [{ setIndex: 0, weight: 1 }] }];
+                                ft.tiers = tiers;
                             }
-                            // Sync expanding wilds flag from modifiers
-                            var mods = gameData.reelSets[s].modifiers;
-                            if (mods) {
-                                gameData.reelSets[s].expandingWilds = mods.some(function(m) { return m.type === 'expandingWilds'; });
+                            ft.awards = [];
+                            for (var ti = 0; ti < tiers.length; ti++) {
+                                var tierTarget = (tiers[ti].bands && tiers[ti].bands.length > 0) ? tiers[ti].bands[0].setIndex : targetIdx;
+                                ft.awards.push({ scatterCount: tiers[ti].count, spins: tiers[ti].spins, targetSetIndex: tierTarget });
+                            }
+                            ft.triggerCount = Math.min.apply(null, tiers.map(function(t) { return t.count; }));
+                            ft.numSpins = tiers[0].spins;
+                            ft.targetSetIndex = (tiers[0].bands && tiers[0].bands.length > 0) ? tiers[0].bands[0].setIndex : targetIdx;
+                            ft.globalMultiplier = ft.globalMultiplier || 1;
+                            ft.retrigger = !!ft.retriggerEnabled;
+                            if (ft.retriggerEnabled) {
+                                var rtIdx = ft.retriggerSetIndex !== undefined ? ft.retriggerSetIndex : targetIdx;
+                                var tgt = gameData.reelSets[targetIdx];
+                                if (tgt) {
+                                    if (!tgt.featureTrigger) tgt.featureTrigger = { enabled: false };
+                                    tgt.featureTrigger.enabled = true;
+                                    tgt.featureTrigger.retrigger = true;
+                                    tgt.featureTrigger.awards = [{ scatterCount: ft.retriggerScatters || 3, spins: ft.retriggerSpins || 5, targetSetIndex: rtIdx }];
+                                    tgt.featureTrigger.targetSetIndex = rtIdx;
+                                    tgt.featureTrigger.globalMultiplier = tgt.featureTrigger.globalMultiplier || 1;
+                                }
                             }
                         }
+                        var mods = gameData.reelSets[s].modifiers;
+                        if (mods) gameData.reelSets[s].expandingWilds = mods.some(function(m) { return m.type === 'expandingWilds'; });
+                    }
+                    // If no feature trigger is enabled, clear scatter symbol so nothing is excluded
+                    if (!scatterSet) {
+                        document.getElementById('scatterSymbol').value = '___NONE___';
                     }
                 }
                 _origRunEvaluation();
                 document.getElementById('resultsArea').style.display = 'none';
-                if (typeof window._renderCustomReelSetsPanel === 'function') {
-                    try { window._renderCustomReelSetsPanel(); } catch(e) { console.error('Reel panel error (eval):', e); }
-                }
             };
         })();
     </script>
@@ -1388,7 +1336,11 @@
                         html += '<option value="coins"' + (lasPayMode === 'coins' ? ' selected' : '') + '>Coin Values</option>';
                         html += '<option value="lines"' + (lasPayMode === 'lines' ? ' selected' : '') + '>Line Wins</option>';
                         html += '</select></label>';
+                        const lasCollectorMult = las.collectorMultiplier || 2;
+                        html += '<label style="display: flex; flex-direction: column; gap: 4px;"><span style="font-size: 0.8em; color: #aaa;">Collector Multiplier</span>';
+                        html += '<input type="number" class="las-coll-mult" data-set="' + i + '" value="' + lasCollectorMult + '" min="1" step="1" style="background: #000; border: 1px solid #cc44ff; color: #fff; padding: 5px 8px; border-radius: 4px; width: 55px; text-align: center; font-size: 0.85em;"></label>';
                         html += '</div>';
+                        html += '<p style="font-size: 0.75em; color: #666; margin-top: 4px;">Collectors can appear during respins. When they land, they collect all visible coin values (x multiplier) and become a coin.</p>';
 
                         // Respin weights
                         html += '<div style="margin-top: 8px;"><span style="font-size: 0.8em; color: #aaa; display: block; margin-bottom: 6px;">Respin Weights (what lands on empty positions):</span>';
@@ -1421,6 +1373,24 @@
                             html += '</span>';
                         }
                         html += '<button class="las-cv-add" data-set="' + i + '" style="background: #222; border: 1px solid #cc44ff; color: #cc44ff; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75em;">+</button>';
+                        html += '</div></div>';
+
+                        // Collector multipliers within Lock & Spin
+                        const lasCollMults = las.collectorMultipliers || [{ multiplier: 2, weight: 40 }, { multiplier: 3, weight: 40 }, { multiplier: 5, weight: 20 }];
+                        if (!las.collectorMultipliers) las.collectorMultipliers = lasCollMults;
+                        html += '<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #333;">';
+                        html += '<span style="font-size: 0.8em; color: #aaa; display: block; margin-bottom: 6px;">Collector Multipliers (during L&S):</span>';
+                        html += '<div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">';
+                        for (let cm = 0; cm < lasCollMults.length; cm++) {
+                            html += '<span style="display: inline-flex; align-items: center; gap: 3px; background: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 2px 5px;">';
+                            html += '<input type="number" class="las-cm-val" data-set="' + i + '" data-cm="' + cm + '" value="' + lasCollMults[cm].multiplier + '" min="1" step="1" style="background: #000; border: 1px solid #cc8800; color: #fff; padding: 2px 4px; border-radius: 3px; width: 40px; text-align: center; font-size: 0.85em;">x ';
+                            html += '<input type="number" class="las-cm-wt" data-set="' + i + '" data-cm="' + cm + '" value="' + lasCollMults[cm].weight + '" min="0" step="1" style="background: #000; border: 1px solid #333; color: #aaa; padding: 2px 4px; border-radius: 3px; width: 35px; text-align: center; font-size: 0.85em;">%';
+                            if (lasCollMults.length > 1) {
+                                html += '<button class="las-cm-rm" data-set="' + i + '" data-cm="' + cm + '" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 0.8em;">&#10005;</button>';
+                            }
+                            html += '</span>';
+                        }
+                        html += '<button class="las-cm-add" data-set="' + i + '" style="background: #222; border: 1px solid #cc8800; color: #cc8800; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75em;">+</button>';
                         html += '</div></div>';
                     }
                     html += '</div>';
@@ -1898,6 +1868,13 @@
                     renderCustomReelSetsPanel();
                 });
             });
+            container.querySelectorAll('.las-coll-mult').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].lockAndSpin.collectorMultiplier = parseInt(e.target.value) || 2;
+                    renderCustomReelSetsPanel();
+                });
+            });
             container.querySelectorAll('.las-wt-sym').forEach(input => {
                 input.addEventListener('change', (e) => {
                     const idx = parseInt(e.target.dataset.set);
@@ -1962,6 +1939,39 @@
                 });
             });
 
+            // L&S Collector multiplier bindings
+            container.querySelectorAll('.las-cm-val').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const cmIdx = parseInt(e.target.dataset.cm);
+                    gameData.reelSets[idx].lockAndSpin.collectorMultipliers[cmIdx].multiplier = parseInt(e.target.value) || 1;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-cm-wt').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const cmIdx = parseInt(e.target.dataset.cm);
+                    gameData.reelSets[idx].lockAndSpin.collectorMultipliers[cmIdx].weight = parseFloat(e.target.value) || 0;
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-cm-rm').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    const cmIdx = parseInt(e.target.dataset.cm);
+                    gameData.reelSets[idx].lockAndSpin.collectorMultipliers.splice(cmIdx, 1);
+                    renderCustomReelSetsPanel();
+                });
+            });
+            container.querySelectorAll('.las-cm-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.target.dataset.set);
+                    gameData.reelSets[idx].lockAndSpin.collectorMultipliers.push({ multiplier: 2, weight: 20 });
+                    renderCustomReelSetsPanel();
+                });
+            });
+
             // Modifier bindings
             container.querySelectorAll('.mod-add-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -1997,10 +2007,18 @@
                                 coinOverrides[entry.symbol] = entry.coinValues.map(cv => ({...cv}));
                             }
                         }
+                        // Copy collector multipliers from paytable as starting point
+                        const collMultOverrides = {};
+                        for (const entry of gameData.paytable) {
+                            if (entry.isCollector && entry.collectorMultipliers) {
+                                collMultOverrides[entry.symbol] = entry.collectorMultipliers.map(cm => ({...cm}));
+                            }
+                        }
                         gameData.reelSets[idx].modifiers.push({
                             type: 'coinValues',
                             _collapsed: false,
-                            overrides: coinOverrides
+                            overrides: coinOverrides,
+                            collectorOverrides: collMultOverrides
                         });
                         syncModifiersToEngine(idx);
                         renderCustomReelSetsPanel();
@@ -2595,6 +2613,14 @@
                 collCb.style.cssText = 'width: 18px; height: 18px; accent-color: #cc8800; cursor: pointer;';
                 collCb.addEventListener('change', (e) => {
                     wizPaytableData[idx].isCollector = e.target.checked;
+                    if (e.target.checked && !wizPaytableData[idx].collectorMultipliers) {
+                        wizPaytableData[idx].collectorMultipliers = [
+                            { multiplier: 2, weight: 40 },
+                            { multiplier: 3, weight: 40 },
+                            { multiplier: 5, weight: 20 }
+                        ];
+                    }
+                    renderWizPaytable();
                 });
                 collCb.addEventListener('click', (e) => e.stopPropagation());
                 tdCollector.appendChild(collCb);
@@ -2623,6 +2649,31 @@
                     coinTd.innerHTML = coinHtml;
                     coinRow.appendChild(coinTd);
                     tbody.appendChild(coinRow);
+                }
+
+                // Collector multipliers row (if collector is enabled)
+                if (entry.isCollector && entry.collectorMultipliers) {
+                    const collRow = document.createElement('tr');
+                    collRow.style.cssText = 'background: #0a0a0a;';
+                    const collTd = document.createElement('td');
+                    collTd.colSpan = 4 + (reels - 2) + 3;
+                    collTd.style.cssText = 'padding: 6px 10px 6px 30px; font-size: 0.8em;';
+                    let collHtml = '<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">';
+                    collHtml += '<span style="color: #cc8800; font-weight: bold;">Multipliers:</span>';
+                    for (let cm = 0; cm < entry.collectorMultipliers.length; cm++) {
+                        collHtml += '<span style="display: inline-flex; align-items: center; gap: 3px; background: #111; border: 1px solid #333; border-radius: 4px; padding: 2px 5px;">';
+                        collHtml += '<input type="number" class="coll-mult-val" data-sym="' + idx + '" data-cm="' + cm + '" value="' + entry.collectorMultipliers[cm].multiplier + '" min="1" step="1" style="background: #000; border: 1px solid #cc8800; color: #fff; padding: 2px 4px; border-radius: 3px; width: 40px; text-align: center; font-size: 0.9em;">x ';
+                        collHtml += '<input type="number" class="coll-mult-wt" data-sym="' + idx + '" data-cm="' + cm + '" value="' + entry.collectorMultipliers[cm].weight + '" min="0" step="1" style="background: #000; border: 1px solid #333; color: #aaa; padding: 2px 4px; border-radius: 3px; width: 35px; text-align: center; font-size: 0.9em;">%';
+                        if (entry.collectorMultipliers.length > 1) {
+                            collHtml += '<button class="coll-mult-rm" data-sym="' + idx + '" data-cm="' + cm + '" style="background: none; border: none; color: #ff4444; cursor: pointer; font-size: 0.8em;">&#10005;</button>';
+                        }
+                        collHtml += '</span>';
+                    }
+                    collHtml += '<button class="coll-mult-add" data-sym="' + idx + '" style="background: #222; border: 1px solid #cc8800; color: #cc8800; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 0.75em;">+</button>';
+                    collHtml += '</div>';
+                    collTd.innerHTML = collHtml;
+                    collRow.appendChild(collTd);
+                    tbody.appendChild(collRow);
                 }
             });
 
@@ -2682,6 +2733,41 @@
                     e.stopPropagation();
                     const symIdx = parseInt(e.target.dataset.sym);
                     wizPaytableData[symIdx].coinValues.push({ value: 1, weight: 10 });
+                    renderWizPaytable();
+                });
+            });
+
+            // Collector multiplier bindings
+            document.querySelectorAll('.coll-mult-val').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const symIdx = parseInt(e.target.dataset.sym);
+                    const cmIdx = parseInt(e.target.dataset.cm);
+                    wizPaytableData[symIdx].collectorMultipliers[cmIdx].multiplier = parseInt(e.target.value) || 1;
+                });
+                input.addEventListener('click', (e) => e.stopPropagation());
+            });
+            document.querySelectorAll('.coll-mult-wt').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const symIdx = parseInt(e.target.dataset.sym);
+                    const cmIdx = parseInt(e.target.dataset.cm);
+                    wizPaytableData[symIdx].collectorMultipliers[cmIdx].weight = parseFloat(e.target.value) || 0;
+                });
+                input.addEventListener('click', (e) => e.stopPropagation());
+            });
+            document.querySelectorAll('.coll-mult-rm').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const symIdx = parseInt(e.target.dataset.sym);
+                    const cmIdx = parseInt(e.target.dataset.cm);
+                    wizPaytableData[symIdx].collectorMultipliers.splice(cmIdx, 1);
+                    renderWizPaytable();
+                });
+            });
+            document.querySelectorAll('.coll-mult-add').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const symIdx = parseInt(e.target.dataset.sym);
+                    wizPaytableData[symIdx].collectorMultipliers.push({ multiplier: 2, weight: 20 });
                     renderWizPaytable();
                 });
             });
@@ -2776,7 +2862,7 @@
                             pays: { ...entry.pays },
                             isCoin: entry.isCoin || false,
                             coinValues: entry.coinValues ? entry.coinValues.map(cv => ({...cv})) : null,
-                            isCollector: entry.isCollector || false
+                            isCollector: entry.isCollector || false, collectorMultipliers: entry.collectorMultipliers ? entry.collectorMultipliers.map(cm => ({...cm})) : null
                         });
                     }
                 }
@@ -2810,7 +2896,7 @@
                     pays: { ...entry.pays },
                     isCoin: entry.isCoin || false,
                     coinValues: entry.coinValues ? entry.coinValues.map(cv => ({...cv})) : null,
-                    isCollector: entry.isCollector || false
+                    isCollector: entry.isCollector || false, collectorMultipliers: entry.collectorMultipliers ? entry.collectorMultipliers.map(cm => ({...cm})) : null
                 }));
 
                 // Set win lines based on win type

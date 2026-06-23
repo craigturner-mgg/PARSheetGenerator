@@ -184,22 +184,27 @@ function processFile(file) {
     currentFileName = file.name;
     const reader = new FileReader();
     reader.onload = (e) => {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
 
-        // Detect if this is an exported evaluation workbook
-        const sheetNames = workbook.SheetNames;
-        const hasReelStrips = sheetNames.some(n => n.startsWith('Reel Strips'));
-        const hasPaytable = sheetNames.includes('Paytable');
-        const hasWinLines = sheetNames.includes('Win Lines');
+            // Detect if this is an exported evaluation workbook
+            const sheetNames = workbook.SheetNames;
+            const hasReelStrips = sheetNames.some(n => n.startsWith('Reel Strips'));
+            const hasPaytable = sheetNames.includes('Paytable');
+            const hasWinLines = sheetNames.includes('Win Lines');
 
-        if (hasReelStrips && hasPaytable && hasWinLines) {
-            parseExportedWorkbook(workbook);
-        } else {
-            const sheet = workbook.Sheets[sheetNames[0]];
-            parseSheet(sheet);
+            if (hasReelStrips && hasPaytable && hasWinLines) {
+                parseExportedWorkbook(workbook);
+            } else {
+                const sheet = workbook.Sheets[sheetNames[0]];
+                parseSheet(sheet);
+            }
+            runEvaluation();
+        } catch(err) {
+            console.error('Import error:', err);
+            alert('Import error: ' + err.message);
         }
-        runEvaluation();
     };
     reader.readAsArrayBuffer(file);
 }
@@ -399,8 +404,14 @@ function parseExportedWorkbook(workbook) {
     // --- Parse Feature Triggers sheet ---
     if (sheetNames.includes('Feature Triggers')) {
         const ftData = XLSX.utils.sheet_to_json(workbook.Sheets['Feature Triggers'], { header: 1 });
-        // Skip header rows (row 0 = title, row 1 = empty, row 2 = column headers)
-        for (let i = 3; i < ftData.length; i++) {
+        // Find first data row (skip any header/title rows)
+        let ftStartRow = 1;
+        for (let i = 0; i < Math.min(ftData.length, 5); i++) {
+            const r = ftData[i];
+            if (r && (r[0] === 'Reel Set' || r[0] === 'Feature Triggers' || !r[0])) { ftStartRow = i + 1; continue; }
+            if (r && r[0] && r[1] !== undefined) { ftStartRow = i; break; }
+        }
+        for (let i = ftStartRow; i < ftData.length; i++) {
             const row = ftData[i];
             if (!row || !row[0]) continue;
             // Skip sub-headers for reel bands
@@ -428,12 +439,26 @@ function parseExportedWorkbook(workbook) {
                     }]
                 };
 
-                // Check for reel bands sub-table
+                // Read tiers JSON if available (column 7)
+                if (row[7]) {
+                    try {
+                        matchSet.featureTrigger.tiers = JSON.parse(row[7]);
+                    } catch(e) {}
+                }
+
+                // Read retrigger settings (columns 8, 9, 10)
+                if (row[8] === true || row[8] === 'TRUE' || row[8] === 1) {
+                    matchSet.featureTrigger.retriggerEnabled = true;
+                    matchSet.featureTrigger.retriggerScatters = parseInt(row[9]) || 3;
+                    matchSet.featureTrigger.retriggerSpins = parseInt(row[10]) || 5;
+                    matchSet.featureTrigger.retriggerBands = [{ setIndex: parseInt(row[5]) || 0, weight: 1 }];
+                }
+
+                // Check for reel bands sub-table (old format compatibility)
                 for (let j = i + 1; j < ftData.length; j++) {
                     const subRow = ftData[j];
                     if (!subRow || !subRow[0]) break;
                     if (String(subRow[0]).startsWith('Reel Bands for: ' + setName)) {
-                        // Next row is header, then data
                         matchSet.featureTrigger.reelBands = [];
                         for (let k = j + 2; k < ftData.length; k++) {
                             const bandRow = ftData[k];
@@ -457,7 +482,14 @@ function parseExportedWorkbook(workbook) {
     // --- Parse Lock & Spin sheet ---
     if (sheetNames.includes('Lock & Spin')) {
         const lasData = XLSX.utils.sheet_to_json(workbook.Sheets['Lock & Spin'], { header: 1 });
-        for (let i = 3; i < lasData.length; i++) {
+        // Find first data row
+        let lasStartRow = 1;
+        for (let i = 0; i < Math.min(lasData.length, 5); i++) {
+            const r = lasData[i];
+            if (r && (r[0] === 'Reel Set' || r[0] === 'Lock & Spin' || !r[0])) { lasStartRow = i + 1; continue; }
+            if (r && r[0] && r[1] !== undefined) { lasStartRow = i; break; }
+        }
+        for (let i = lasStartRow; i < lasData.length; i++) {
             const row = lasData[i];
             if (!row || !row[0]) continue;
             const setName = String(row[0]);
@@ -1196,32 +1228,29 @@ function calculateLockAndSpinRtp(config, totalWeight) {
 
         if (pTrigger <= 0) continue;
 
-        // Expected value of the L&S feature once triggered
-        // Simulate: start with triggerCount coins, respin empty positions
-        // Each respin either lands a coin (resetting lives) or empty (losing a life)
+        // Expected total coins at end of feature — use mini simulation for accuracy
+        const simCount = 10000;
+        let simTotalCoins = 0;
         const totalRespinWeight = respinWeights.reduce((s, w) => s + w.weight, 0);
         const pCoinOnRespin = respinWeights.filter(w => w.symbol !== 'EMPTY').reduce((s, w) => s + w.weight, 0) / totalRespinWeight;
 
-        // Expected total coins at end of feature (geometric/Markov approximation)
-        // Starting coins: triggerCount, empty positions: totalPositions - triggerCount
-        // Each respin: P(coin) lands one more, resets lives. P(empty) loses a life.
-        let expectedTotalCoins = triggerCount;
-        let emptyPositions = totalPositions - triggerCount;
-        let currentLives = lives;
-
-        // Simple simulation: expected additional coins from respins
-        // E(additional) = sum of geometric series of fills
-        // Each "round" of respins: expected coins before life expires
-        if (emptyPositions > 0 && pCoinOnRespin > 0) {
-            // Expected additional coins per feature using Markov chain approximation
-            // In each respin step: P(coin) fills one spot and resets lives, P(empty) loses a life
-            // Feature ends when lives reach 0 or all positions filled
-            // E(additional coins) ≈ lives * pCoin / (1 - pCoin) (geometric with resets)
-            // More precise: expected coins before losing all lives consecutively
-            const expectedBeforeDeath = pCoinOnRespin / (Math.pow(1 - pCoinOnRespin, lives));
-            const additionalCoins = Math.min(expectedBeforeDeath, emptyPositions);
-            expectedTotalCoins += additionalCoins;
+        for (let sim = 0; sim < simCount; sim++) {
+            let filled = triggerCount;
+            let livesLeft = lives;
+            while (livesLeft > 0 && filled < totalPositions) {
+                const empty = totalPositions - filled;
+                let landed = false;
+                for (let ep = 0; ep < empty; ep++) {
+                    if (Math.random() < pCoinOnRespin) {
+                        filled++;
+                        landed = true;
+                    }
+                }
+                if (landed) { livesLeft = lives; } else { livesLeft--; }
+            }
+            simTotalCoins += filled;
         }
+        const expectedTotalCoins = simTotalCoins / simCount;
 
         // Expected payout value
         let expectedPayout = 0;
@@ -1365,10 +1394,30 @@ function calculateCoinCollectorRtp(config, totalWeight) {
         }
         const pCollector = 1 - pNoCollector;
 
+        // Calculate expected collector multiplier from weighted multipliers
+        let expectedCollectorMult = 1;
+        for (const collSym of collectorSymbols) {
+            const collEntry = gameData.paytable.find(e => e.symbol === collSym.symbol);
+            if (collEntry && collEntry.collectorMultipliers && collEntry.collectorMultipliers.length > 0) {
+                let mults = collEntry.collectorMultipliers;
+                // Check for per-set override
+                if (reelSet.modifiers) {
+                    const cvMod = reelSet.modifiers.find(m => m.type === 'coinValues');
+                    if (cvMod && cvMod.collectorOverrides && cvMod.collectorOverrides[collSym.symbol]) {
+                        mults = cvMod.collectorOverrides[collSym.symbol];
+                    }
+                }
+                const totalMw = mults.reduce((s, cm) => s + cm.weight, 0);
+                if (totalMw > 0) {
+                    expectedCollectorMult = mults.reduce((s, cm) => s + (cm.multiplier * cm.weight / totalMw), 0);
+                }
+                break;
+            }
+        }
+
         // RTP contribution (as percentage)
-        // collector pay = expected total coin value in window
-        // This is per-spin, so: P(collector) * expectedCoinValue * 100 (to get percentage)
-        const contribution = pCollector * totalExpectedCoinValue * weightFraction * 100;
+        // collector pay = expected total coin value in window * expected multiplier
+        const contribution = pCollector * totalExpectedCoinValue * expectedCollectorMult * weightFraction * 100;
         totalContribution += contribution;
     }
 
@@ -1936,385 +1985,39 @@ function displayResultsWeighted(rtp, hitFreq, symbolResults, scatterResults, tot
     renderReelSetsPanel();
 }
 
+
 // ============ REEL SETS MANAGER ============
 function renderReelSetsPanel() {
-    const container = document.getElementById('reelSetsPanel');
-    if (!container) return;
-
-    const totalWeight = gameData.reelSets.reduce((sum, rs) => sum + rs.weight, 0);
-
-    let html = '<table style="width: 100%;"><tr><th></th><th>Name</th><th>Weight</th><th>Weight %</th><th>Stops (R1)</th><th>Wild Mult.</th><th>Actions</th></tr>';
-
-    for (let i = 0; i < gameData.reelSets.length; i++) {
-        const set = gameData.reelSets[i];
-        const isActive = i === gameData.activeReelSet;
-        const pct = totalWeight > 0 ? ((set.weight / totalWeight) * 100).toFixed(1) : '0';
-        const stops = set.reelStrips && set.reelStrips[0] ? set.reelStrips[0].length : 0;
-        const activeStyle = isActive ? 'background: #1a3a5e; border-left: 3px solid #00d4ff;' : '';
-        const multSummary = getWildMultiplierSummary(set.wildMultipliers);
-
-        html += `<tr style="${activeStyle}">
-            <td><input type="radio" name="activeReelSet" value="${i}" ${isActive ? 'checked' : ''}></td>
-            <td><input type="text" value="${set.name}" data-set="${i}" class="reel-set-name-input" style="background: #0f3460; border: 1px solid #1a2a4e; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; width: 140px;"></td>
-            <td><input type="number" value="${set.weight}" min="0" step="1" data-set="${i}" class="reel-set-weight-input" style="background: #0f3460; border: 1px solid #1a2a4e; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; width: 70px;"></td>
-            <td>${pct}%</td>
-            <td>${stops}</td>
-            <td style="font-size: 0.8em; color: ${multSummary === 'None' ? '#666' : '#ffaa00'};">${multSummary}</td>
-            <td>${gameData.reelSets.length > 1 ? `<button class="reel-set-delete-btn" data-set="${i}" style="background: #ff4444; color: #fff; padding: 4px 10px; font-size: 0.8em;">✕</button>` : ''}</td>
-        </tr>`;
-    }
-
-    html += '</table>';
-    html += `<div style="margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap;">
-        <button id="addReelSetBtn" style="font-size: 0.85em; padding: 8px 16px;">+ Add Reel Set</button>
-        <button id="duplicateReelSetBtn" style="font-size: 0.85em; padding: 8px 16px; background: #0f3460; color: #00d4ff; border: 1px solid #00d4ff;">📋 Duplicate Active</button>
-    </div>`;
-
-    // Wild Multiplier config for active set
-    const activeSet = gameData.reelSets[gameData.activeReelSet];
-    html += renderWildMultiplierEditor(activeSet);
-
-    // Feature Trigger config for active set
-    html += renderFeatureTriggerEditor(activeSet);
-
-    container.innerHTML = html;
-
-    // Bind reel set events
-    container.querySelectorAll('input[name="activeReelSet"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            const newIdx = parseInt(e.target.value);
-            switchToReelSet(newIdx);
-            runEvaluation();
-        });
-    });
-
-    container.querySelectorAll('.reel-set-name-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const idx = parseInt(e.target.dataset.set);
-            gameData.reelSets[idx].name = e.target.value;
-        });
-    });
-
-    container.querySelectorAll('.reel-set-weight-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const idx = parseInt(e.target.dataset.set);
-            gameData.reelSets[idx].weight = Math.max(0, parseFloat(e.target.value) || 0);
-            runEvaluation();
-        });
-    });
-
-    container.querySelectorAll('.reel-set-delete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const idx = parseInt(e.target.dataset.set);
-            if (!confirm(`Delete reel set "${gameData.reelSets[idx].name}"?`)) return;
-            gameData.reelSets.splice(idx, 1);
-            if (gameData.activeReelSet >= gameData.reelSets.length) {
-                gameData.activeReelSet = gameData.reelSets.length - 1;
-            }
-            switchToReelSet(gameData.activeReelSet);
-            runEvaluation();
-        });
-    });
-
-    const addBtn = document.getElementById('addReelSetBtn');
-    if (addBtn) {
-        addBtn.addEventListener('click', () => {
-            const config = getConfig();
-            const emptyStrips = [];
-            for (let r = 0; r < config.numReels; r++) {
-                emptyStrips.push([]);
-            }
-            gameData.reelSets.push({
-                name: `Reel Set ${gameData.reelSets.length + 1}`,
-                weight: 1,
-                reelStrips: emptyStrips,
-                symbolCounts: {},
-                wildMultipliers: [],
-                featureTrigger: { enabled: false, targetSetIndex: -1, awards: [], globalMultiplier: 1, retrigger: true }
-            });
-            switchToReelSet(gameData.reelSets.length - 1);
-            runEvaluation();
-        });
-    }
-
-    const dupBtn = document.getElementById('duplicateReelSetBtn');
-    if (dupBtn) {
-        dupBtn.addEventListener('click', () => {
-            const source = gameData.reelSets[gameData.activeReelSet];
-            gameData.reelSets.push({
-                name: source.name + ' (copy)',
-                weight: source.weight,
-                reelStrips: source.reelStrips.map(r => [...r]),
-                symbolCounts: JSON.parse(JSON.stringify(source.symbolCounts)),
-                wildMultipliers: source.wildMultipliers ? source.wildMultipliers.map(wm => ({ ...wm })) : [],
-                featureTrigger: source.featureTrigger ? JSON.parse(JSON.stringify(source.featureTrigger)) : { enabled: false, targetSetIndex: -1, awards: [], globalMultiplier: 1, retrigger: true }
-            });
-            switchToReelSet(gameData.reelSets.length - 1);
-            runEvaluation();
-        });
-    }
-
-    // Bind wild multiplier events
-    bindWildMultiplierEvents();
-
-    // Bind feature trigger events
-    bindFeatureTriggerEvents();
-}
-
-function getWildMultiplierSummary(wildMultipliers) {
-    if (!wildMultipliers || wildMultipliers.length === 0) return 'None';
-    const expected = wildMultipliers.reduce((sum, wm) => sum + (wm.multiplier * wm.chance), 0);
-    return `Avg ${expected.toFixed(2)}x`;
-}
-
-function renderWildMultiplierEditor(activeSet) {
-    const multipliers = activeSet.wildMultipliers || [];
-
-    let html = `<div style="margin-top: 20px; padding: 15px; background: #0f3460; border-radius: 8px; border-left: 3px solid #ffaa00;">
-        <h4 style="color: #ffaa00; margin-bottom: 10px;">🃏 Wild Multipliers — ${activeSet.name}</h4>
-        <p style="color: #aaa; font-size: 0.8em; margin-bottom: 10px;">When a win includes wild(s), it is multiplied. Define the chance each multiplier value is applied. Chances must sum to 1 (100%).</p>`;
-
-    if (multipliers.length > 0) {
-        html += `<table style="width: 100%; margin-bottom: 10px;">
-            <tr><th>Multiplier</th><th>Chance</th><th>Chance %</th><th></th></tr>`;
-        for (let i = 0; i < multipliers.length; i++) {
-            const wm = multipliers[i];
-            html += `<tr>
-                <td><input type="number" value="${wm.multiplier}" min="0" step="1" data-wm-idx="${i}" class="wm-mult-input" style="background: #16213e; border: 1px solid #1a2a4e; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; width: 70px;"></td>
-                <td><input type="number" value="${wm.chance}" min="0" max="1" step="0.01" data-wm-idx="${i}" class="wm-chance-input" style="background: #16213e; border: 1px solid #1a2a4e; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; width: 80px;"></td>
-                <td style="color: #aaa;">${(wm.chance * 100).toFixed(1)}%</td>
-                <td><button class="wm-delete-btn" data-wm-idx="${i}" style="background: #ff4444; color: #fff; padding: 3px 8px; font-size: 0.8em; border: none; border-radius: 4px; cursor: pointer;">✕</button></td>
-            </tr>`;
-        }
-
-        const totalChance = multipliers.reduce((sum, wm) => sum + wm.chance, 0);
-        const expectedMult = multipliers.reduce((sum, wm) => sum + (wm.multiplier * wm.chance), 0);
-        const chanceColor = Math.abs(totalChance - 1) < 0.001 ? '#00ff88' : '#ff4444';
-
-        html += `<tr style="border-top: 2px solid #1a2a4e;">
-            <td style="font-weight: bold; color: #ffaa00;">Expected: ${expectedMult.toFixed(2)}x</td>
-            <td style="font-weight: bold; color: ${chanceColor};">Total: ${totalChance.toFixed(2)}</td>
-            <td style="color: ${chanceColor};">${(totalChance * 100).toFixed(1)}%</td>
-            <td></td>
-        </tr>`;
-        html += '</table>';
-
-        if (Math.abs(totalChance - 1) > 0.001) {
-            html += `<p style="color: #ff4444; font-size: 0.8em; margin-bottom: 8px;">⚠️ Chances must sum to 1.0 (currently ${totalChance.toFixed(3)})</p>`;
-        }
-    } else {
-        html += `<p style="color: #666; font-size: 0.85em; margin-bottom: 10px;">No wild multipliers configured. Wins involving wilds pay at 1x.</p>`;
-    }
-
-    html += `<button id="addWildMultBtn" style="font-size: 0.8em; padding: 6px 14px;">+ Add Multiplier</button>`;
-    html += '</div>';
-
-    return html;
-}
-
-function bindWildMultiplierEvents() {
-    const container = document.getElementById('reelSetsPanel');
-    const activeSet = gameData.reelSets[gameData.activeReelSet];
-
-    container.querySelectorAll('.wm-mult-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const idx = parseInt(e.target.dataset.wmIdx);
-            activeSet.wildMultipliers[idx].multiplier = Math.max(0, parseFloat(e.target.value) || 0);
-            runEvaluation();
-        });
-    });
-
-    container.querySelectorAll('.wm-chance-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const idx = parseInt(e.target.dataset.wmIdx);
-            activeSet.wildMultipliers[idx].chance = Math.max(0, Math.min(1, parseFloat(e.target.value) || 0));
-            runEvaluation();
-        });
-    });
-
-    container.querySelectorAll('.wm-delete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const idx = parseInt(e.target.dataset.wmIdx);
-            activeSet.wildMultipliers.splice(idx, 1);
-            runEvaluation();
-        });
-    });
-
-    const addBtn = document.getElementById('addWildMultBtn');
-    if (addBtn) {
-        addBtn.addEventListener('click', () => {
-            if (!activeSet.wildMultipliers) activeSet.wildMultipliers = [];
-            activeSet.wildMultipliers.push({ multiplier: 2, chance: 0.5 });
-            runEvaluation();
-        });
+    // Handled by custom panel in index.html
+    if (typeof window._renderCustomReelSetsPanel === "function") {
+        window._renderCustomReelSetsPanel();
     }
 }
 
-// ============ FEATURE TRIGGER (FREE GAMES) ============
-function renderFeatureTriggerEditor(activeSet) {
-    const ft = activeSet.featureTrigger || { enabled: false, targetSetIndex: -1, awards: [], globalMultiplier: 1, retrigger: true };
-
-    let html = `<div style="margin-top: 20px; padding: 15px; background: #0f3460; border-radius: 8px; border-left: 3px solid #00ff88;">
-        <h4 style="color: #00ff88; margin-bottom: 10px;">🎰 Feature Trigger (Free Games) — ${activeSet.name}</h4>
-        <p style="color: #aaa; font-size: 0.8em; margin-bottom: 12px;">When scatters land on this reel set, trigger free spins. Each scatter tier can target a different reel set.</p>`;
-
-    // Enable toggle
-    html += `<label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer;">
-        <input type="checkbox" id="ftEnabled" ${ft.enabled ? 'checked' : ''} style="width: 18px; height: 18px;">
-        <span style="color: #e0e0e0;">Enable feature trigger on this set</span>
-    </label>`;
-
-    if (ft.enabled) {
-        // Global settings
-        html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
-            <label style="display: flex; flex-direction: column; gap: 4px;">
-                <span style="font-size: 0.8em; color: #aaa;">Global Multiplier (all FG wins)</span>
-                <input type="number" id="ftGlobalMult" value="${ft.globalMultiplier}" min="1" step="1" style="background: #16213e; border: 1px solid #00ff88; color: #e0e0e0; padding: 6px 10px; border-radius: 6px;">
-            </label>
-            <label style="display: flex; align-items: center; gap: 8px; padding-top: 18px;">
-                <input type="checkbox" id="ftRetrigger" ${ft.retrigger ? 'checked' : ''} style="width: 16px; height: 16px;">
-                <span style="font-size: 0.85em; color: #e0e0e0;">Allow retriggers</span>
-            </label>
-        </div>`;
-
-        // Awards table with per-row target set
-        html += `<h5 style="color: #00d4ff; margin-bottom: 8px;">Scatter Awards</h5>`;
-        if (ft.awards.length > 0) {
-            html += '<table style="width: 100%; margin-bottom: 10px;"><tr><th>Scatter Count</th><th>Spins</th><th>Target Reel Set</th><th></th></tr>';
-            for (let i = 0; i < ft.awards.length; i++) {
-                const award = ft.awards[i];
-                const awardTarget = award.targetSetIndex !== undefined ? award.targetSetIndex : ft.targetSetIndex;
-                html += `<tr>
-                    <td><input type="number" value="${award.scatterCount}" min="3" max="10" data-award-idx="${i}" class="ft-scatter-input" style="background: #16213e; border: 1px solid #1a2a4e; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; width: 60px;"></td>
-                    <td><input type="number" value="${award.spins}" min="1" data-award-idx="${i}" class="ft-spins-input" style="background: #16213e; border: 1px solid #1a2a4e; color: #e0e0e0; padding: 4px 8px; border-radius: 4px; width: 70px;"></td>
-                    <td><select data-award-idx="${i}" class="ft-target-select" style="background: #16213e; border: 1px solid #00ff88; color: #e0e0e0; padding: 4px 8px; border-radius: 4px;">`;
-                for (let j = 0; j < gameData.reelSets.length; j++) {
-                    const selected = j === awardTarget ? ' selected' : '';
-                    html += `<option value="${j}"${selected}>${gameData.reelSets[j].name}</option>`;
-                }
-                html += `</select></td>
-                    <td><button class="ft-award-delete-btn" data-award-idx="${i}" style="background: #ff4444; color: #fff; padding: 3px 8px; font-size: 0.8em; border: none; border-radius: 4px; cursor: pointer;">✕</button></td>
-                </tr>`;
-            }
-            html += '</table>';
-        } else {
-            html += '<p style="color: #666; font-size: 0.85em; margin-bottom: 10px;">No scatter awards defined. Add at least one.</p>';
-        }
-
-        html += `<button id="addFtAwardBtn" style="font-size: 0.8em; padding: 6px 14px; background: #00ff88; color: #1a1a2e;">+ Add Award Tier</button>`;
-    }
-
-    html += '</div>';
-    return html;
-}
-
-function bindFeatureTriggerEvents() {
-    const container = document.getElementById('reelSetsPanel');
-    const activeSet = gameData.reelSets[gameData.activeReelSet];
-    if (!activeSet.featureTrigger) {
-        activeSet.featureTrigger = { enabled: false, targetSetIndex: -1, awards: [], globalMultiplier: 1, retrigger: true };
-    }
-    const ft = activeSet.featureTrigger;
-
-    const enabledCheckbox = document.getElementById('ftEnabled');
-    if (enabledCheckbox) {
-        enabledCheckbox.addEventListener('change', (e) => {
-            ft.enabled = e.target.checked;
-            runEvaluation();
-        });
-    }
-
-    const globalMultInput = document.getElementById('ftGlobalMult');
-    if (globalMultInput) {
-        globalMultInput.addEventListener('change', (e) => {
-            ft.globalMultiplier = Math.max(1, parseFloat(e.target.value) || 1);
-            runEvaluation();
-        });
-    }
-
-    const retriggerCheckbox = document.getElementById('ftRetrigger');
-    if (retriggerCheckbox) {
-        retriggerCheckbox.addEventListener('change', (e) => {
-            ft.retrigger = e.target.checked;
-            runEvaluation();
-        });
-    }
-
-    container.querySelectorAll('.ft-scatter-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const idx = parseInt(e.target.dataset.awardIdx);
-            ft.awards[idx].scatterCount = parseInt(e.target.value) || 3;
-            runEvaluation();
-        });
-    });
-
-    container.querySelectorAll('.ft-spins-input').forEach(input => {
-        input.addEventListener('change', (e) => {
-            const idx = parseInt(e.target.dataset.awardIdx);
-            ft.awards[idx].spins = parseInt(e.target.value) || 1;
-            runEvaluation();
-        });
-    });
-
-    container.querySelectorAll('.ft-target-select').forEach(select => {
-        select.addEventListener('change', (e) => {
-            const idx = parseInt(e.target.dataset.awardIdx);
-            ft.awards[idx].targetSetIndex = parseInt(e.target.value);
-            runEvaluation();
-        });
-    });
-
-    container.querySelectorAll('.ft-award-delete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const idx = parseInt(e.target.dataset.awardIdx);
-            ft.awards.splice(idx, 1);
-            runEvaluation();
-        });
-    });
-
-    const addAwardBtn = document.getElementById('addFtAwardBtn');
-    if (addAwardBtn) {
-        addAwardBtn.addEventListener('click', () => {
-            const nextCount = ft.awards.length > 0 ? ft.awards[ft.awards.length - 1].scatterCount + 1 : 3;
-            const defaultTarget = ft.awards.length > 0 ? ft.awards[ft.awards.length - 1].targetSetIndex || 0 : 0;
-            ft.awards.push({ scatterCount: nextCount, spins: 8, targetSetIndex: defaultTarget });
-            runEvaluation();
-        });
-    }
-}
+function getWildMultiplierSummary() { return ""; }
 
 // ============ TABS ============
 document.querySelectorAll('.tab-buttons button[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
-        // Only toggle among sibling tab buttons (not sub-tabs)
         if (btn.classList.contains('data-sub-tab')) return;
         document.querySelectorAll('.tab-buttons button[data-tab]').forEach(b => {
             if (!b.classList.contains('data-sub-tab')) b.classList.remove('active');
         });
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         btn.classList.add('active');
-        document.getElementById(btn.dataset.tab).classList.add('active');
+        const target = document.getElementById(btn.dataset.tab);
+        if (target) target.classList.add('active');
 
-        // Initialize reel config when its tab is activated
         if (btn.dataset.tab === 'reelConfig') {
             renderReelConfig();
         }
-
-        // Initialize reel editor when its tab is activated
         if (btn.dataset.tab === 'reelEditor' && typeof initReelEditor === 'function') {
             if (gameData.reelStrips.length > 0 && gameData.reelStrips[0].length > 0) {
                 initReelEditor();
             }
         }
-
-        // Initialize paytable editor when its tab is activated
         if (btn.dataset.tab === 'paytableEditor') {
             renderPaytableEditor();
-        }
-
-        // Initialize data tab sub-tabs
-        if (btn.dataset.tab === 'dataTab') {
-            initDataSubTabs();
         }
     });
 });
@@ -2831,8 +2534,36 @@ function simulateLockAndSpin() {
     const lives = las.lives || 3;
     const respinWeights = las.respinWeights || [{ symbol: 'COIN', weight: 20 }, { symbol: 'EMPTY', weight: 80 }];
     const totalRespinWeight = respinWeights.reduce((s, w) => s + w.weight, 0);
-    const pCoinOnRespin = respinWeights.filter(w => w.symbol !== 'EMPTY').reduce((s, w) => s + w.weight, 0) / totalRespinWeight;
     const triggerCount = las.triggerCount || 6;
+    const collectorMultiplier = las.collectorMultiplier || 2;
+
+    // Get collector multiplier weights (L&S specific first, then paytable fallback)
+    let collectorMultipliers = [{ multiplier: collectorMultiplier, weight: 100 }];
+    if (las.collectorMultipliers && las.collectorMultipliers.length > 0) {
+        collectorMultipliers = las.collectorMultipliers;
+    } else {
+        const collEntries = gameData.paytable.filter(e => e.isCollector);
+        if (collEntries.length > 0 && collEntries[0].collectorMultipliers && collEntries[0].collectorMultipliers.length > 0) {
+            collectorMultipliers = collEntries[0].collectorMultipliers;
+        }
+    }
+    const totalCollMultWt = collectorMultipliers.reduce((s, cm) => s + cm.weight, 0);
+
+    function sampleCollectorMult() {
+        const rand = Math.random() * totalCollMultWt;
+        let cum = 0;
+        for (const cm of collectorMultipliers) {
+            cum += cm.weight;
+            if (rand <= cum) return cm.multiplier;
+        }
+        return collectorMultipliers[collectorMultipliers.length - 1].multiplier;
+    }
+
+    // Categorise respin weights
+    const collectorSymbols = gameData.paytable.filter(e => e.isCollector).map(e => e.symbol);
+    const pCoinOnRespin = respinWeights.filter(w => w.symbol !== 'EMPTY' && !collectorSymbols.includes(w.symbol)).reduce((s, w) => s + w.weight, 0) / totalRespinWeight;
+    const pCollectorOnRespin = respinWeights.filter(w => collectorSymbols.includes(w.symbol)).reduce((s, w) => s + w.weight, 0) / totalRespinWeight;
+    const pLandAnything = pCoinOnRespin + pCollectorOnRespin;
 
     // Coin values for sampling
     const coinValues = las.coinValues || [{ value: 1, weight: 50 }, { value: 2, weight: 30 }, { value: 5, weight: 15 }, { value: 10, weight: 5 }];
@@ -2868,12 +2599,20 @@ function simulateLockAndSpin() {
             let currentLives = lives;
             while (currentLives > 0 && filledPositions < totalPositions) {
                 const emptyPositions = totalPositions - filledPositions;
-                // Each empty position independently tries to land a coin
                 let landed = false;
                 for (let ep = 0; ep < emptyPositions; ep++) {
-                    if (Math.random() < pCoinOnRespin) {
+                    const rand = Math.random();
+                    if (rand < pCoinOnRespin) {
+                        // Coin lands
                         filledPositions++;
                         totalValue += sampleCoinVal();
+                        landed = true;
+                    } else if (rand < pCoinOnRespin + pCollectorOnRespin) {
+                        // Collector lands — collects all current coins * random multiplier, becomes a coin
+                        const mult = sampleCollectorMult();
+                        const collectedValue = totalValue * mult;
+                        totalValue += collectedValue;
+                        filledPositions++;
                         landed = true;
                     }
                 }
@@ -2891,20 +2630,40 @@ function simulateLockAndSpin() {
 
         const avgWin = totalWin / numSims;
 
+        // Calculate trigger probability (chance of getting triggerCount+ coins in view)
+        const triggerSym = las.triggerSymbol || 'COIN';
+        const strips = activeSet.reelStrips;
+        let expectedCoinsPerSpin = 0;
+        for (let r = 0; r < config.numReels; r++) {
+            const rl = strips[r].length;
+            const coinStops = strips[r].filter(s => s === triggerSym).length;
+            expectedCoinsPerSpin += (coinStops * config.numRows) / rl;
+        }
+        const pPerPos = expectedCoinsPerSpin / totalPositions;
+        let pTrigger = 0;
+        for (let k = triggerCount; k <= totalPositions; k++) {
+            pTrigger += binomialProbability(totalPositions, k, pPerPos);
+        }
+        const triggerFreq = pTrigger > 0 ? (1 / pTrigger).toFixed(2) : 'N/A';
+
         // Display results
         let html = '<h3 style="color: #cc44ff; margin-bottom: 15px;">Lock & Spin Analysis</h3>';
         html += '<p style="color: #aaa; font-size: 0.85em; margin-bottom: 15px;">Based on ' + numSims.toLocaleString() + ' simulated features (starting with ' + triggerCount + ' coins locked).</p>';
 
-        html += '<div style="display: flex; gap: 20px; margin-bottom: 20px;">';
-        html += '<div style="background: #111; border: 1px solid #cc44ff; border-radius: 8px; padding: 15px; flex: 1;">';
+        html += '<div style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">';
+        html += '<div style="background: #111; border: 1px solid #cc44ff; border-radius: 8px; padding: 15px; flex: 1; min-width: 150px;">';
+        html += '<div style="color: #aaa; font-size: 0.85em;">Trigger Hit Rate</div>';
+        html += '<div style="color: #fff; font-size: 1.8em; font-weight: bold;">1 in ' + triggerFreq + '</div>';
+        html += '</div>';
+        html += '<div style="background: #111; border: 1px solid #cc44ff; border-radius: 8px; padding: 15px; flex: 1; min-width: 150px;">';
         html += '<div style="color: #aaa; font-size: 0.85em;">Average Feature Win</div>';
         html += '<div style="color: #fff; font-size: 1.8em; font-weight: bold;">' + avgWin.toFixed(2) + 'x</div>';
         html += '</div>';
-        html += '<div style="background: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; flex: 1;">';
+        html += '<div style="background: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; flex: 1; min-width: 150px;">';
         html += '<div style="color: #aaa; font-size: 0.85em;">Full Board Rate</div>';
         html += '<div style="color: #fff; font-size: 1.8em; font-weight: bold;">' + ((endStateCounts[0] / numSims) * 100).toFixed(2) + '%</div>';
         html += '</div>';
-        html += '<div style="background: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; flex: 1;">';
+        html += '<div style="background: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; flex: 1; min-width: 150px;">';
         html += '<div style="color: #aaa; font-size: 0.85em;">Avg Coins at End</div>';
         html += '<div style="color: #fff; font-size: 1.8em; font-weight: bold;">' + (totalPositions - endStateCounts.reduce((s, c, idx) => s + (idx * c), 0) / numSims).toFixed(1) + '</div>';
         html += '</div>';
@@ -3041,17 +2800,31 @@ function calculateWinDistribution() {
                 }
 
                 if (collectorVisible) {
-                    // Sum all coin values visible in window
+                    // Sample collector multiplier
+                    let collMult = 1;
+                    const collEntryWd = gameData.paytable.find(e => e.isCollector && e.collectorMultipliers && e.collectorMultipliers.length > 0);
+                    if (collEntryWd) {
+                        const twt = collEntryWd.collectorMultipliers.reduce((s, cm) => s + cm.weight, 0);
+                        const rnd = Math.random() * twt;
+                        let cc = 0;
+                        for (const cm of collEntryWd.collectorMultipliers) {
+                            cc += cm.weight;
+                            if (rnd <= cc) { collMult = cm.multiplier; break; }
+                        }
+                    }
+                    // Sum all coin values visible in window, apply multiplier
+                    let coinTotal = 0;
                     for (let r = 0; r < config.numReels; r++) {
                         for (let row = 0; row < config.numRows; row++) {
                             const idx = (stops[r] + row) % reelLengths[r];
                             const sym = gameData.reelStrips[r][idx];
                             const coinEntry = coinSymbols.find(c => c.symbol === sym);
                             if (coinEntry) {
-                                totalWin += sampleCoinValue(coinEntry);
+                                coinTotal += sampleCoinValue(coinEntry);
                             }
                         }
                     }
+                    totalWin += coinTotal * collMult;
                 }
             }
 
